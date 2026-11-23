@@ -37,3 +37,5 @@
 # Written by Herdr into each mod folder for editor tooling; not hand-authored.
 mods/board*/jsconfig.json
 mods/board*/gpui-kit.d.ts
+
+!README.md
