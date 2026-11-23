@@ -1,0 +1,262 @@
+{
+  "id": "root",
+  "type": "row",
+  "titlebar": "none",
+  "theme": {
+    "light": "paper",
+    "dark": "board-readable-dark"
+  },
+  "preview": "mods/board/preview.svg",
+  "ui_font": "Geist",
+  "font_size": 14,
+  "background": "background",
+  "terminal_padding": [
+    12,
+    10
+  ],
+  "gap": 0,
+  "resizable": true,
+  "children": [
+    {
+      "id": "sidebar",
+      "type": "column",
+      "size": {
+        "px": 230
+      },
+      "min": 180,
+      "max": 420,
+      "border": {
+        "width": 1,
+        "color": "border"
+      },
+      "resizable": true,
+      "divider": {
+        "width": 1,
+        "color": "border"
+      },
+      "children": [
+        {
+          "id": "board-sidebar-list",
+          "type": "block",
+          "min": 100,
+          "content": {
+            "mod": "board",
+            "props": {
+              "role": "sidebar"
+            }
+          }
+        },
+        {
+          "id": "board-usage",
+          "type": "block",
+          "size": {
+            "px": 190
+          },
+          "min": 36,
+          "max": 400,
+          "content": {
+            "mod": "board-usage"
+          }
+        }
+      ]
+    },
+    {
+      "id": "board-content",
+      "type": "column",
+      "children": [
+        {
+          "id": "board-header",
+          "type": "block",
+          "size": {
+            "px": 42
+          },
+          "window_drag": true,
+          "content": {
+            "mod": "board",
+            "props": {
+              "role": "header"
+            }
+          }
+        },
+        {
+          "id": "board-split",
+          "type": "column",
+          "resizable": true,
+          "divider": {
+            "width": 5,
+            "color": "border"
+          },
+          "children": [
+            {
+              "id": "board-cards",
+              "type": "block",
+              "size": {
+                "px": 290
+              },
+              "border": {
+                "width": 1,
+                "color": "border"
+              },
+              "content": {
+                "mod": "board"
+              },
+              "min": 100
+            },
+            {
+              "id": "workspace",
+              "type": "column",
+              "padding": [
+                8,
+                12
+              ],
+              "gap": 0,
+              "resizable": false,
+              "children": [
+                {
+                  "id": "workspace-title",
+                  "type": "block",
+                  "size": {
+                    "px": 26
+                  },
+                  "background": "background",
+                  "radius": 7,
+                  "content": {
+                    "mod": "board",
+                    "props": {
+                      "role": "terminals"
+                    }
+                  }
+                },
+                {
+                  "id": "workspace-tabs",
+                  "type": "block",
+                  "size": {
+                    "px": 28
+                  },
+                  "content": {
+                    "mod": "board",
+                    "props": {
+                      "role": "path-tabs"
+                    }
+                  }
+                },
+                {
+                  "id": "board-editor-split",
+                  "type": "row",
+                  "gap": 8,
+                  "resizable": true,
+                  "children": [
+                    {
+                      "id": "live-terminals",
+                      "type": "block",
+                      "background": "background",
+                      "content": {
+                        "tab": "active",
+                        "pane": {
+                          "gap": 12,
+                          "radius": 7,
+                          "background": "background",
+                          "lone": true,
+                          "border": {
+                            "width": 1,
+                            "color": "border"
+                          },
+                          "focus": {
+                            "width": 1,
+                            "color": "accent"
+                          },
+                          "header": {
+                            "content": {
+                              "mod": "board",
+                              "props": {
+                                "role": "pane"
+                              }
+                            },
+                            "height": 24,
+                            "position": "top",
+                            "reveal": "always"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "id": "board-preview",
+                      "type": "block",
+                      "hidden": true,
+                      "size": {
+                        "weight": 1
+                      },
+                      "min": 180,
+                      "content": {
+                        "mod": "board-preview"
+                      }
+                    }
+                  ]
+                }
+              ],
+              "min": 180
+            }
+          ]
+        }
+      ],
+      "resizable": false
+    },
+    {
+      "id": "board-files-column",
+      "type": "column",
+      "size": {
+        "px": 320
+      },
+      "min": 220,
+      "max": 700,
+      "border": {
+        "width": 1,
+        "color": "border"
+      },
+      "resizable": true,
+      "divider": {
+        "width": 1,
+        "color": "border"
+      },
+      "children": [
+        {
+          "id": "board-changes",
+          "type": "block",
+          "size": {
+            "px": 160
+          },
+          "min": 26,
+          "max": 400,
+          "content": {
+            "mod": "board-changes"
+          }
+        },
+        {
+          "id": "board-files",
+          "type": "block",
+          "min": 120,
+          "content": {
+            "mod": "board-files"
+          }
+        },
+        {
+          "id": "board-timeline",
+          "type": "block",
+          "size": {
+            "px": 170
+          },
+          "min": 26,
+          "max": 400,
+          "content": {
+            "mod": "board-timeline"
+          }
+        }
+      ]
+    }
+  ],
+  "traffic_lights": [
+    12,
+    12
+  ],
+  "ui_font_size": 14
+}

@@ -1,0 +1,42 @@
+# Written by Herdr itself, not hand-edited -- see AGENTS.md's file table.
+view.json
+shared.json
+shared.json.corrupt-*
+seen.json
+installed.json
+window.json
+windows.json
+*.error
+*.reset-*
+*.old-*
+keys.json.backup-*
+
+# Rewritten on every start to match this Herdr version.
+frame/
+gpui-kit.d.ts
+herdr.d.ts
+
+# Shipped assets Herdr writes itself.
+icons/
+
+# Per-field layout clicks (sizes, collapse state, theme picks) -- noisy and
+# machine-local; a deliberate layout-file edit should win, not a stray drag.
+layouts/.state/
+
+# Herdr bookkeeping / local caches, not configuration.
+backups/
+data/
+telemetry/
+update-notes.json
+update-notes-cache.md
+update-notes-media/
+
+# Runtime socket file -- not a regular file, must never be committed.
+herdr-app.sock
+
+# Mod-local build artifacts the app writes.
+mods/*/node_modules/
+mods/*/jsconfig.json
+mods/*/.d.ts
+
+.DS_Store
