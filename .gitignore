@@ -1,42 +1,39 @@
-# Written by Herdr itself, not hand-edited -- see AGENTS.md's file table.
-view.json
-shared.json
-shared.json.corrupt-*
-seen.json
-installed.json
-window.json
-windows.json
-*.error
-*.reset-*
-*.old-*
-keys.json.backup-*
+# This repo tracks only the hand-built pieces for the "board" layout:
+# layouts/board.json, themes/board-readable-dark.json, and every mods/board*
+# folder. Everything else here is either Herdr's own shipped layout/mods
+# (rewritten on every start) or machine-written bookkeeping -- see AGENTS.md's
+# file table -- so it's ignored wholesale rather than listed file by file.
+*
 
-# Rewritten on every start to match this Herdr version.
-frame/
-gpui-kit.d.ts
-herdr.d.ts
+!.gitignore
+!layouts/
+!layouts/board.json
+!themes/
+!themes/board-readable-dark.json
+!mods/
+!mods/board/
+!mods/board/**
+!mods/board-changes/
+!mods/board-changes/**
+!mods/board-files/
+!mods/board-files/**
+!mods/board-ide-menu/
+!mods/board-ide-menu/**
+!mods/board-menu/
+!mods/board-menu/**
+!mods/board-picker/
+!mods/board-picker/**
+!mods/board-preview/
+!mods/board-preview/**
+!mods/board-session/
+!mods/board-session/**
+!mods/board-timeline/
+!mods/board-timeline/**
+!mods/board-usage/
+!mods/board-usage/**
+!mods/board-worktree/
+!mods/board-worktree/**
 
-# Shipped assets Herdr writes itself.
-icons/
-
-# Per-field layout clicks (sizes, collapse state, theme picks) -- noisy and
-# machine-local; a deliberate layout-file edit should win, not a stray drag.
-layouts/.state/
-
-# Herdr bookkeeping / local caches, not configuration.
-backups/
-data/
-telemetry/
-update-notes.json
-update-notes-cache.md
-update-notes-media/
-
-# Runtime socket file -- not a regular file, must never be committed.
-herdr-app.sock
-
-# Mod-local build artifacts the app writes.
-mods/*/node_modules/
-mods/*/jsconfig.json
-mods/*/.d.ts
-
-.DS_Store
+# Written by Herdr into each mod folder for editor tooling; not hand-authored.
+mods/board*/jsconfig.json
+mods/board*/gpui-kit.d.ts
