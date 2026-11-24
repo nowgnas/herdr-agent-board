@@ -1,41 +1,63 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, focused, props, run, exec, appHome, checking, theme, layout } from "herdr";
+import { panelState } from "../board-common/panel.js";
 
-function node(root, id) {
-  if (root?.id === id) return root;
-  for (const child of root?.children ?? []) { const item = node(child, id); if (item) return item; }
-  return null;
-}
 function current() {
   const space = spaces().find(s => s.active), focus = focused();
   const pane = panes().find(p => p.pane === focus?.pane);
   return { cwd: pane?.cwd || focus?.cwd || space?.folder || "", machine: space?.machine ?? null };
 }
+// 캐시 키는 정규화된 경로(끝 슬래시 제거). 집계 기준은 기존처럼 "현재 경로"입니다.
+const normalize = p => (p && p.length > 1 ? p.replace(/[\\/]+$/, "") || p : p);
+const EVERY = 120000, REMEMBER = 8;
+// 기존 접힘 판정 그대로: (size.px ?? 190) < 80
+const PANEL = { defaultPx: 190, collapsedBelow: 80 };
 export default class Usage extends View {
   init(_props, cx) {
+    this.results = new Map(); // key → { data, at } (최근 REMEMBER개)
     this.refresh(cx);
-    cx.timer.every(120000, cx => this.refresh(cx, true));
+    cx.timer.every(EVERY, cx => { if (this.active()) this.refresh(cx, true); });
+  }
+  active() { return panelState(layout(), "board-usage", PANEL).active; }
+  remember(key, data) {
+    this.results.delete(key);
+    this.results.set(key, { data, at: Date.now() });
+    while (this.results.size > REMEMBER) this.results.delete(this.results.keys().next().value);
   }
   refresh(cx, periodic = false) {
-    const loc = current(), key = JSON.stringify(loc);
-    if (key !== this.key) { this.key = key; this.data = null; this.error = null; this.loading = false; }
-    if (!loc.cwd || loc.machine || this.loading || checking()) return;
+    const loc = current(), cwd = normalize(loc.cwd), key = JSON.stringify({ cwd, machine: loc.machine });
+    if (key !== this.key) {
+      const hit = this.results.get(key);
+      this.key = key; this.data = hit?.data ?? null; this.error = null;
+      if (hit && Date.now() - hit.at > EVERY) periodic = true; // 오래된 결과는 보여 주면서 새로 고침
+    }
+    if (!cwd || loc.machine || checking()) return;
     if (!periodic && this.data) return;
-    this.loading = true;
+    // 이미 실행 중이면 새 python을 띄우지 않습니다. 끝난 뒤 경로가 바뀌었으면 한 번만 다시 실행.
+    if (this.running) return;
+    this.running = true;
     cx.spawn(async cx => {
       try {
-        const result = await exec("python3", [`${appHome()}/mods/board-usage/usage.py`, loc.cwd]);
+        const result = await exec("python3", [`${appHome()}/mods/board-usage/usage.py`, cwd]);
         if (result.code !== 0) throw new Error("기록을 읽을 수 없습니다");
-        if (this.key === key) { this.data = JSON.parse(result.stdout); this.error = null; }
+        const data = JSON.parse(result.stdout);
+        this.remember(key, data);
+        if (this.key === key) { this.data = data; this.error = null; }
       } catch { if (this.key === key) this.error = "기록 조회 실패"; }
-      finally { if (this.key === key) this.loading = false; cx.notify(); }
+      finally {
+        this.running = false;
+        cx.notify();
+        if (this.key !== key) this.refresh(cx);
+      }
     });
   }
   render(cx) {
-    const loc = current();
-    if (JSON.stringify(loc) !== this.key) this.refresh(cx);
-    const t = theme(), collapsed = (node(layout(), "board-usage")?.size?.px ?? 190) < 80;
+    const loc = current(), state = panelState(layout(), "board-usage", PANEL);
+    if (JSON.stringify({ cwd: normalize(loc.cwd), machine: loc.machine }) !== this.key) this.refresh(cx);
+    else if (state.active && this.wasActive === false) this.refresh(cx, Date.now() - (this.results.get(this.key)?.at ?? 0) > EVERY); // 다시 펼치면 바로 갱신
+    this.wasActive = state.active;
+    const t = theme(), collapsed = state.collapsed;
     const ratio = (n, total) => total ? `${n}/${total} · ${Math.round(100 * n / total)}%` : "관측된 세션 없음";
     // Share of sessions that actually used the feature: higher share reads as
     // "working" (green), none at all stays dim rather than alarming red.
