@@ -35,6 +35,12 @@
 !mods/board-worktree/**
 !mods/board-todo/
 !mods/board-todo/**
+!mods/board-common/
+!mods/board-common/**
+
+# 표준 라이브러리 테스트(node --test, python3 -m unittest)
+!tests/
+!tests/**
 
 # Written by Herdr into each mod folder for editor tooling; not hand-authored.
 mods/board*/jsconfig.json
