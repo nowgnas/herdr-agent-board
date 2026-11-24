@@ -1,4 +1,5 @@
 import { labelIndex } from "./labels.js";
+import { PICKER_SESSION_LIMIT } from "../board-common/limits.js";
 // Go to a tab. Drops from the Terminals layout's space chip (popup, at: "top"). Spaces with
 // something that needs you come first, quiet spaces (no agent running)
 // fold into "earlier". Type to filter, ↑/↓ and Enter to go, ctrl+d to close
@@ -53,22 +54,14 @@ export default class Picker extends View {
     this.machines = [];
     let cache = null;
     try { cache = JSON.parse(localStorage.getItem("board.sessions.cache") ?? "null"); } catch {}
-    this.sessions = Array.isArray(cache?.sessions) ? cache.sessions : [];
+    // 최근 세션부터 PICKER_SESSION_LIMIT개만. 캐시에도 같은 상한을 둡니다.
+    this.sessionLimit = PICKER_SESSION_LIMIT;
+    this.sessions = Array.isArray(cache?.sessions) ? cache.sessions.slice(0, PICKER_SESSION_LIMIT) : [];
+    this.sessionsMore = Boolean(cache?.more);
     this.prepareSessions();
     this.sessionError = "";
     this.sessionsLoading = !this.sessions.length && (!cache?.at || Date.now() - cache.at > 30000);
-    if (!checking() && (!cache?.at || Date.now() - cache.at > 30000)) cx.spawn(async cx => {
-      try {
-        const result = await exec("python3", [`${appHome()}/mods/board-picker/sessions.py`]);
-        if (result.code !== 0) throw new Error(result.stderr || "세션 목록을 읽을 수 없습니다");
-        const data = JSON.parse(result.stdout);
-        this.sessions = data.sessions ?? [];
-        this.prepareSessions();
-        this.sessionError = (data.errors ?? []).join(" · ");
-        if (!this.sessionError) try { localStorage.setItem("board.sessions.cache", JSON.stringify({ at: Date.now(), sessions: this.sessions })); } catch {}
-      } catch (error) { this.sessionError = String(error); }
-      finally { this.sessionsLoading = false; cx.notify(); }
-    });
+    if (!checking() && (!cache?.at || Date.now() - cache.at > 30000)) this.loadSessions(cx);
     this.handle = cx.focus_handle();
     if (!checking()) cx.spawn(async (cx) => {
       try {
@@ -76,6 +69,27 @@ export default class Picker extends View {
         if (r.code === 0) this.machines = (JSON.parse(r.stdout).machines ?? []).filter((m) => m.state === "connected" && !m.temporary).map((m) => m.name);
       } catch {}
       cx.notify();
+    });
+  }
+
+  loadSessions(cx) {
+    const limit = this.sessionLimit;
+    cx.spawn(async cx => {
+      try {
+        const result = await exec("python3", [`${appHome()}/mods/board-picker/sessions.py`, "--limit", String(limit)]);
+        if (result.code !== 0) throw new Error(result.stderr || "세션 목록을 읽을 수 없습니다");
+        const data = JSON.parse(result.stdout);
+        if (limit !== this.sessionLimit) return; // 더 큰 상한으로 다시 불러오는 중
+        this.sessions = data.sessions ?? [];
+        this.sessionsMore = Boolean(data.more);
+        this.prepareSessions();
+        this.sessionError = (data.errors ?? []).join(" · ");
+        if (!this.sessionError) try {
+          const kept = this.sessions.slice(0, PICKER_SESSION_LIMIT).map(({ search, ...session }) => session);
+          localStorage.setItem("board.sessions.cache", JSON.stringify({ at: Date.now(), sessions: kept, more: this.sessionsMore || this.sessions.length > PICKER_SESSION_LIMIT }));
+        } catch {}
+      } catch (error) { this.sessionError = String(error); }
+      finally { this.sessionsLoading = false; cx.notify(); }
     });
   }
 
@@ -129,6 +143,7 @@ export default class Picker extends View {
       out.push({ kind: "head", sessionHead: true });
       for (const session of sessions) out.push({ kind: "session", session });
     }
+    if (this.sessionsMore && !this.sessionsLoading) out.push({ kind: "moreSessions", count: this.sessions.length });
     out.push({ kind: "new" });
     out.push({ kind: "space", machine: null });
     for (const m of this.machines) out.push({ kind: "space", machine: m });
@@ -142,6 +157,14 @@ export default class Picker extends View {
       this.showEarlier = !this.showEarlier;
       this.input.focus();
       cx.notify();
+      return;
+    }
+    if (r.kind === "moreSessions") {
+      this.sessionLimit += PICKER_SESSION_LIMIT;
+      this.sessionsLoading = true;
+      this.loadSessions(cx);
+      this.input.focus();
+      cx?.notify();
       return;
     }
     if (r.kind === "session" && !r.session.available) { this.sessionError = "세션의 폴더를 찾을 수 없습니다: " + r.session.cwd; cx?.notify(); return; }
@@ -172,7 +195,7 @@ export default class Picker extends View {
     // One continuous strip: each row (and the group title before it) at a fixed
     // y. Scrolling moves the strip only as far as it takes to keep the selected
     // row in view, so the arrows can't run the selection off the list.
-    const H = { head: 29, earlier: 35, new: 36, ctx: 32, space: 32, session: 50 };
+    const H = { head: 29, earlier: 35, new: 36, ctx: 32, space: 32, session: 50, moreSessions: 32 };
     const tops = [];
     let y = 0;
     rows.forEach((r) => { tops.push(y); y += H[r.kind] ?? 32; });
@@ -231,6 +254,11 @@ export default class Picker extends View {
           .child(h_flex().gap(8).items_center().child(div().text_size(11).text_color(t.accent).child(s.kind))
             .child(div().flex_1().min_w(0).truncate().text_color(s.available ? t.foreground : t.dim).child(s.title)))
           .child(div().min_w(0).truncate().text_size(11).text_color(t.dim).child(s.cwd + (s.available ? "" : " (폴더 없음)")));
+      }
+      if (r.kind === "moreSessions") {
+        return h_flex().id("pk-more-sessions").mx(4).px(10).h(32).items_center().rounded(7).gap(8).text_size(12).text_color(t.dim).cursor_pointer()
+          .when(on, (el) => el.bg(t.hover)).hover((s) => s.bg(t.hover)).on_click((_e, cx) => this.go(r, cx))
+          .child(`세션 더 보기 · 최근 ${r.count}개 표시 중`);
       }
       if (r.kind === "new" || r.kind === "space") {
         const label = r.kind === "new" ? "new tab" : r.machine ? `new space on ${r.machine}` : "new space";
