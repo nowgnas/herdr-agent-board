@@ -234,6 +234,40 @@ class UsageCacheTest(unittest.TestCase):
         (self.fx.cache / 'usage-v2.json').write_text('{broken')
         self.assertEqual(strip(self.collect()), self.legacy(self.fx.proj))
 
+    def test_필드가_빠지거나_타입이_틀린_캐시_항목만_다시_파싱한다(self):
+        expected = strip(self.collect())
+        cache_file = self.fx.cache / 'usage-v2.json'
+        data = json.loads(cache_file.read_text())
+        keys = sorted(data['files'])
+        self.assertEqual(len(keys), 5)
+        del data['files'][keys[0]]['cost']              # 리뷰 재현: cost 없는 레코드
+        data['files'][keys[1]]['places'] = 'nope'       # 타입 오류
+        data['files'][keys[2]] = ['not', 'a', 'dict']   # 레코드 자체가 dict 아님
+        cache_file.write_text(json.dumps(data))
+        for _ in range(2):  # 연속 실행 모두 KeyError 없이 같은 결과, 두 번째는 고쳐진 캐시 재사용
+            result = self.collect()
+            self.assertEqual(strip(result), expected)
+        self.assertEqual(result['_cache'], {'parsed': 0, 'reused': 5})
+
+    def test_잘못된_항목만_재파싱_횟수(self):
+        self.collect()
+        cache_file = self.fx.cache / 'usage-v2.json'
+        data = json.loads(cache_file.read_text())
+        key = sorted(data['files'])[0]
+        del data['files'][key]['cost']
+        cache_file.write_text(json.dumps(data))
+        self.assertEqual(self.collect()['_cache'], {'parsed': 1, 'reused': 4})
+
+    def test_valid_record(self):
+        ok = {'cost': 0, 'skill': False, 'forge': True, 'skills': {'a': 2}, 'places': ['h'], 'mtime': 1, 'size': 2}
+        self.assertTrue(self.usage.valid_record(ok))
+        self.assertTrue(self.usage.valid_record(dict(ok, cost=1.5)))
+        for bad in ({k: v for k, v in ok.items() if k != 'cost'}, dict(ok, cost='1'), dict(ok, cost=True),
+                    dict(ok, skill=1), dict(ok, skills={'a': 'x'}), dict(ok, skills=[]), dict(ok, places=[1]),
+                    dict(ok, mtime=None), dict(ok, size=1.0), None, [], 'x'):
+            with self.subTest(bad=bad):
+                self.assertFalse(self.usage.valid_record(bad))
+
 
 if __name__ == '__main__':
     unittest.main()

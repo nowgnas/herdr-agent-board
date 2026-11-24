@@ -225,6 +225,20 @@ def save_cache(path, month, files):
         pass
 
 
+def _int(v):
+    return isinstance(v, int) and not isinstance(v, bool)
+
+
+def valid_record(r):
+    """캐시 레코드가 summarize에 필요한 필드를 올바른 타입으로 갖췄는지. 아니면 그 파일만 다시 파싱."""
+    if not isinstance(r, dict): return False
+    cost, skills, places = r.get('cost'), r.get('skills'), r.get('places')
+    return ((_int(cost) or isinstance(cost, float)) and isinstance(r.get('skill'), bool) and isinstance(r.get('forge'), bool)
+            and isinstance(skills, dict) and all(isinstance(k, str) and _int(v) for k, v in skills.items())
+            and isinstance(places, list) and all(isinstance(x, str) for x in places)
+            and _int(r.get('mtime')) and _int(r.get('size')))
+
+
 def scan(kind, pattern, parser, cutoff, cache, fresh, stats, realpath):
     """이번 달 파일들의 (캐시 키, 파일별 집계)를 glob 순서대로. 실패한 파일 수도 함께."""
     records, errors = [], 0
@@ -234,7 +248,7 @@ def scan(kind, pattern, parser, cutoff, cache, fresh, stats, realpath):
             if st.st_mtime < cutoff: continue
             key = kind + ':' + digest(filename)
             hit = cache.get(key)
-            if hit and hit.get('mtime') == st.st_mtime_ns and hit.get('size') == st.st_size:
+            if valid_record(hit) and hit['mtime'] == st.st_mtime_ns and hit['size'] == st.st_size:
                 stats['reused'] += 1
             else:
                 hit = dict(parser(filename, realpath), mtime=st.st_mtime_ns, size=st.st_size)
