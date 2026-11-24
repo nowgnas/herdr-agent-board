@@ -2,6 +2,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseStatus, markOf, statusSignature, createGitStatus, STATUS_ARGS } from "../mods/board-changes/_common/gitstatus.js";
+// 실제 모드처럼 서로 다른 복사본(별개의 모듈 인스턴스)
+import { createGitStatus as createFilesGitStatus } from "../mods/board-files/_common/gitstatus.js";
 
 const Z = entries => entries.map(([xy, p]) => `${xy} ${p}`).join("\0") + "\0";
 
@@ -29,7 +31,7 @@ test("statusSignature: 내용이 같으면 같은 서명", () => {
 });
 
 // store를 넘기면 같은 shared 저장소를 다른 런타임(다른 shared 함수)에서 보는 것처럼 만듭니다.
-function fakeEnv({ store = new Map(), delay = () => 5, stdout = () => Z([[" M", "a.js"], ["??", "new/b.js"]]), rootOf = () => "/repo" } = {}) {
+function fakeEnv({ store = new Map(), delay = () => 5, stdout = () => Z([[" M", "a.js"], ["??", "new/b.js"]]), rootOf = () => "/repo", rootDelay = () => 0 } = {}) {
   const calls = [], writes = [];
   let clock = 1000;
   const env = {
@@ -40,7 +42,11 @@ function fakeEnv({ store = new Map(), delay = () => 5, stdout = () => Z([[" M", 
     setShared: (k, v) => { writes.push(k); store.set(k, v); },
     exec: async (cmd, args, opts) => {
       calls.push({ cmd, args, opts });
-      if (args[0] === "rev-parse") return { code: 0, stdout: rootOf(opts.cwd) + "\n", stderr: "" };
+      if (args[0] === "rev-parse") {
+        const ms = rootDelay(opts.cwd);
+        if (ms) await new Promise(r => setTimeout(r, ms));
+        return { code: 0, stdout: rootOf(opts.cwd) + "\n", stderr: "" };
+      }
       await new Promise(r => setTimeout(r, delay(opts.cwd)));
       return { code: 0, stdout: stdout(opts.cwd), stderr: "" };
     },
@@ -145,6 +151,72 @@ test("다른 런타임의 모드도 결과가 같으면 shared에 쓰지 않는�
   const files = await createGitStatus(filesEnv).status("/repo", null);
   assert.equal(files.sig, store.get("board.git.status").sig);
   assert.deepEqual(filesEnv.writes, []);
+});
+
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const perRepo = cwd => Z([[" M", `${cwd.slice(1)}.js`]]);
+
+test("모드 복사본이 달라도(changes/_common, files/_common) 같은 shared면 실행을 합친다: A→B→A는 /A,/B", async () => {
+  assert.notEqual(createGitStatus, createFilesGitStatus);
+  const env = fakeEnv({ rootOf: cwd => cwd, delay: cwd => (cwd === "/A" ? 30 : 5), stdout: perRepo });
+  const changes = createGitStatus(env), files = createFilesGitStatus(env);
+  const a1 = changes.status("/A", null);
+  await wait(1);
+  const b = files.status("/B", null);
+  await wait(1);
+  const a2 = files.status("/A", null);
+  const [ra1, , ra2] = await Promise.all([a1, b, a2]);
+  assert.deepEqual(statusCwds(env), ["/A", "/B"]);
+  assert.equal(ra1, ra2);
+  // 끝난 뒤 다시 A를 물어도 TTL 안이면 복사본을 넘어 재사용
+  await files.status("/A", null);
+  await changes.status("/B", null);
+  assert.deepEqual(statusCwds(env), ["/A", "/B"]);
+});
+
+test("이전 요청 시작→새 요청 시작→이전 완료→새 완료: 공유 스냅샷은 새 결과", async () => {
+  const env = fakeEnv({ rootOf: cwd => cwd, delay: cwd => (cwd === "/A" ? 5 : 30), stdout: perRepo });
+  const changes = createGitStatus(env), files = createFilesGitStatus(env);
+  const old = changes.status("/A", null);
+  await wait(1);
+  env.tick(10);
+  const fresh = files.status("/B", null);
+  const ra = await old; // 이전 요청이 먼저 끝남(at이 새 요청 시작보다 큼)
+  assert.equal(ra.root, "/A");
+  assert.equal(env.store.get("board.git.status"), undefined); // 더 최신 순번이 진행 중이라 쓰지 않음
+  const rb = await fresh;
+  assert.equal(env.store.get("board.git.status").sig, rb.sig);
+  assert.deepEqual(env.writes, ["board.git.status"]);
+});
+
+test("다른 런타임: 이전 요청이 먼저 끝나 썼어도 나중에 시작한 요청 결과가 스냅샷이 된다", async () => {
+  const store = new Map();
+  const older = fakeEnv({ store, rootOf: cwd => cwd, delay: () => 5, stdout: () => Z([[" M", "old.js"]]) });
+  const newer = fakeEnv({ store, rootOf: cwd => cwd, delay: () => 30, stdout: () => Z([[" M", "new.js"]]) });
+  const p1 = createGitStatus(older).status("/A", null);
+  await wait(1);
+  newer.tick(10);
+  const p2 = createFilesGitStatus(newer).status("/A", null);
+  older.tick(20); // 이전 요청의 완료 시각(at)이 새 요청 시작보다 나중
+  await p1;
+  assert.deepEqual(store.get("board.git.status").entries, [[" M", "old.js"]]);
+  const r2 = await p2;
+  assert.deepEqual(r2.entries, [[" M", "new.js"]]);
+  assert.deepEqual(store.get("board.git.status").entries, [[" M", "new.js"]]);
+});
+
+test("순번은 rev-parse 전에: A 시작→B 시작·완료→A의 루트 조회 완료여도 A가 B 스냅샷을 덮지 않는다", async () => {
+  const env = fakeEnv({ rootOf: cwd => cwd, rootDelay: cwd => (cwd === "/A" ? 30 : 0), delay: () => 1, stdout: perRepo });
+  const changes = createGitStatus(env), files = createFilesGitStatus(env);
+  const a = changes.status("/A", null);
+  await wait(1);
+  const rb = await files.status("/B", null);
+  assert.equal(env.store.get("board.git.status").sig, rb.sig);
+  const ra = await a;
+  assert.equal(ra.root, "/A");
+  assert.deepEqual(statusCwds(env), ["/B", "/A"]);
+  assert.equal(env.store.get("board.git.status").root, "/B");
+  assert.deepEqual(env.writes, ["board.git.status"]);
 });
 
 test("git 저장소가 아니면 기존 문구로 실패", async () => {
