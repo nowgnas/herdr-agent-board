@@ -80,6 +80,13 @@ export function createGitStatus({ exec, shared, setShared, now = () => Date.now(
     setShared(SNAPSHOT, snap);
   }
 
+  // 앞 요청이 끝날 때 이 요청이 live에 있어 게시가 막혔을 수 있으므로, 실행 없이 끝나는 요청
+  // (캐시 히트·진행 중 합류)은 자신을 live에서 뺀 뒤 그 저장소의 마지막 결과를 원래 순번으로 다시 게시해 봅니다.
+  function catchUp(key) {
+    const last = st.checked.get(key);
+    if (last) publish(last.snap, last.seq);
+  }
+
   async function run(rootPath, on, key, seq, started) {
     const status = await exec("git", STATUS_ARGS, { cwd: rootPath, on }).catch(() => null);
     if (status?.code !== 0) throw new Error("git status 실패");
@@ -104,10 +111,13 @@ export function createGitStatus({ exec, shared, setShared, now = () => Date.now(
     try { rootPath = await root(cwd, on); } catch (e) { st.live.delete(seq); throw e; }
     const key = locKey(rootPath, on);
     const running = st.runs.get(key);
-    if (running) { st.live.delete(seq); return running; }
+    if (running) {
+      st.live.delete(seq);
+      return running.then(snap => { catchUp(key); return snap; });
+    }
     const mine = st.checked.get(key)?.snap, theirs = snapshot(rootPath, on);
     const fresh = [mine, theirs].filter(s => s && now() - s.at < maxAge).sort((a, b) => b.at - a.at)[0];
-    if (fresh) { st.live.delete(seq); return fresh; }
+    if (fresh) { st.live.delete(seq); catchUp(key); return fresh; }
     const promise = run(rootPath, on, key, seq, started).finally(() => {
       st.live.delete(seq);
       if (st.runs.get(key) === promise) st.runs.delete(key);

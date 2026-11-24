@@ -219,6 +219,27 @@ test("순번은 rev-parse 전에: A 시작→B 시작·완료→A의 루트 조�
   assert.deepEqual(env.writes, ["board.git.status"]);
 });
 
+test("후속 요청의 루트 조회가 늦어도: 앞 요청의 새 결과가 공유 스냅샷에 게시된다", async () => {
+  let out = Z([[" M", "old.js"]]);
+  const env = fakeEnv({ rootOf: () => "/repo", rootDelay: cwd => (cwd === "/repo/sub" ? 30 : 0), delay: () => 5, stdout: () => out });
+  const changes = createGitStatus(env), files = createFilesGitStatus(env);
+  await changes.status("/repo", null);
+  assert.deepEqual(env.store.get("board.git.status").entries, [[" M", "old.js"]]);
+  out = Z([[" M", "new.js"]]);
+  env.tick(6000); // TTL 지남
+  const a = changes.status("/repo", null); // 루트는 캐시, git status 실행
+  await wait(1);
+  const b = files.status("/repo/sub", null); // 루트 조회(30ms) 중에 a가 끝남
+  const ra = await a;
+  assert.deepEqual(ra.entries, [[" M", "new.js"]]);
+  const rb = await b; // TTL 안의 캐시를 받음
+  assert.deepEqual(rb.entries, [[" M", "new.js"]]);
+  assert.deepEqual(env.store.get("board.git.status").entries, [[" M", "new.js"]]);
+  assert.deepEqual(changes.snapshot("/repo", null).entries, [[" M", "new.js"]]);
+  assert.equal(statusCwds(env).length, 2);
+  assert.deepEqual(env.writes, ["board.git.status", "board.git.status"]);
+});
+
 test("git 저장소가 아니면 기존 문구로 실패", async () => {
   const env = fakeEnv();
   env.exec = async () => ({ code: 128, stdout: "", stderr: "fatal" });
