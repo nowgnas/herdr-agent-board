@@ -1,7 +1,9 @@
 import { labelIndex } from "./labels.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Scrollbar, InputState, Input } from "gpui-base";
-import { agents, spaces, panes, props, run, openOverlay, focused, theme, pickFolder, notify, setAgentOrder, layout, nextCommand, checking } from "herdr";
+import { agents, spaces, panes, props, run, openOverlay, focused, theme, pickFolder, notify, setAgentOrder, layout, nextCommand, checking, settings } from "herdr";
+import { BOARD_VIRTUAL_MIN_CARDS } from "../board-common/limits.js";
+import { virtualSlice, wheelScroll, scrollThumb } from "../board-common/virtual.js";
 
 function findNode(node, id) {
   if (node?.id === id) return node;
@@ -40,7 +42,11 @@ const worktreeColor = branch => {
   for (let i = 0; i < branch.length; i++) hash = (hash * 31 + branch.charCodeAt(i)) >>> 0;
   return palette[hash % palette.length];
 };
-const branchOf = a => spaces().find(s => s.id === a.space)?.branch ?? null;
+// 카드마다 spaces()를 훑지 않도록 render당 한 번 만든 space id 인덱스를 씁니다.
+const spaceIndex = allSpaces => new Map(allSpaces.map(s => [s.id, s]));
+const branchOf = (a, byId) => byId.get(a.space)?.branch ?? null;
+// 카드 h(58) + gap(5): 가상 스크롤 열의 행 간격
+const CARD_STRIDE = 63;
 export default class Board extends View {
   init(_props, cx) {
     const role = props()?.role;
@@ -84,8 +90,8 @@ export default class Board extends View {
       });
     }
   }
-  card(a, state, tabLabel) {
-    const branch = branchOf(a), wColor = worktreeColor(branch);
+  card(a, state, tabLabel, byId) {
+    const branch = branchOf(a, byId), wColor = worktreeColor(branch);
     return h_flex().id(`agent-${a.address}`).w_full().h(58).flex_none().rounded(6).overflow_hidden()
       .bg(colors().white).border(1).border_color(colors().line).cursor_pointer().hover(s => s.border_color(state.color))
       .on_click(() => run("agent.focus", { terminal: a.address }))
@@ -226,7 +232,7 @@ export default class Board extends View {
     const role = props()?.role;
     if (role === "sidebar") return this.sidebar();
     if (role === "path-tabs") return this.pathTabs();
-    const list = agents(), allSpaces = spaces(), tabLabel = labelIndex(allSpaces, panes());
+    const list = agents(), allSpaces = spaces();
     const active = allSpaces.find(s => s.active);
     if (role === "header") return v_flex().size_full().bg(colors().white).px(16).justify_center().gap(8)
       .child(h_flex().items_center().gap(8)
@@ -248,7 +254,7 @@ export default class Board extends View {
           .tooltip("파일 사이드바 열기 / 접기 (⌘⇧B)")
           .on_click(() => run("layout.toggle", { id: "board-files-column" })).child("Files")));
     if (role === "terminals") {
-      const tab = active?.tabs.find(t => t.active);
+      const tab = active?.tabs.find(t => t.active), tabLabel = labelIndex(allSpaces, panes());
       return h_flex().size_full().px(10).items_center().gap(6).bg(colors().white)
         .child(dot(colors().violet, 6)).child(div().text_size(10.5).font_semibold().text_color(colors().ink).child("Live workspace"))
         .child(div().text_size(10).text_color(colors().muted).child(`${active?.name ?? ""} / ${tab ? tabLabel(tab.id) : ""}`));
@@ -262,25 +268,46 @@ export default class Board extends View {
           .child(div().id(`board-pane-close-${p.pane}`).px(5).rounded(3).cursor_pointer().tooltip("패널 닫기")
             .hover(s => s.bg(theme().hover)).on_click((_e, cx) => { cx.stop_propagation(); run("pane.close", { pane: p.pane }); }).child("×")));
     }
-    setAgentOrder(states().flatMap(s => list.filter(a => a.status === s.key).map(a => a.address)));
+    const columns = states(), tabLabel = labelIndex(allSpaces, panes()), byId = spaceIndex(allSpaces);
+    // 순서가 바뀔 때만 Herdr에 알립니다.
+    const order = columns.flatMap(s => list.filter(a => a.status === s.key).map(a => a.address));
+    const orderKey = order.join("\n");
+    if (orderKey !== this.agentOrder) { this.agentOrder = orderKey; setAgentOrder(order); }
     const q = this.filterText.trim().toLowerCase();
     const filtered = list.filter(a => {
       if (!this.filterStatuses.has(a.status)) return false;
-      if (this.filterBranches.size && !this.filterBranches.has(branchOf(a))) return false;
+      if (this.filterBranches.size && !this.filterBranches.has(branchOf(a, byId))) return false;
       if (q && !`${a.tab_name} ${a.space_name} ${a.program?.name ?? ""} ${a.address}`.toLowerCase().includes(q)) return false;
       return true;
     });
     return v_flex().size_full().bg(colors().bg)
       .child(this.filterBar())
-      .child(h_flex().flex_1().min_h(0).px(14).py(9).gap(10).children(states().map(state => {
+      .child(h_flex().flex_1().min_h(0).px(14).py(9).gap(10).children(columns.map(state => {
         const cards = filtered.filter(a => a.status === state.key);
         return v_flex().flex_1().min_w(0).min_h(0).h_full().gap(5)
           .child(h_flex().h(19).flex_none().items_center().gap(5).px(2)
             .child(dot(state.color, 6)).child(div().text_size(11.5).font_semibold().text_color(colors().ink).child(state.label))
             .child(div().px(4).py(1).rounded(3).bg(state.wash).text_size(9).text_color(state.color).child(String(cards.length))))
-          .child(div().flex_1().min_h(0).relative()
-            .child(v_flex().id(`board-cards-${state.key}`).absolute().inset_0().overflow_y_scroll().gap(5).children(cards.map(a => this.card(a, state, tabLabel))))
-            .child(Scrollbar.vertical(`board-cards-${state.key}`).absolute().inset_0()));
+          .child(cards.length > BOARD_VIRTUAL_MIN_CARDS ? this.virtualCards(cards, state, tabLabel, byId)
+            : div().flex_1().min_h(0).relative()
+              .child(v_flex().id(`board-cards-${state.key}`).absolute().inset_0().overflow_y_scroll().gap(5).children(cards.map(a => this.card(a, state, tabLabel, byId))))
+              .child(Scrollbar.vertical(`board-cards-${state.key}`).absolute().inset_0()));
       })));
+  }
+  // 카드가 많은 열은 화면에 보이는 카드만 만듭니다(적을 때는 위의 기존 스크롤 그대로).
+  virtualCards(cards, state, tabLabel, byId) {
+    if (!this.cardScroll) { this.cardScroll = {}; this.cardView = {}; }
+    const viewport = this.cardView[state.key] ?? 400;
+    const { rows, window: w } = virtualSlice(cards, { rowHeight: CARD_STRIDE, viewport: viewport + 5, scroll: this.cardScroll[state.key] ?? 0, overscan: 2 });
+    this.cardScroll[state.key] = w.scroll;
+    const thumb = scrollThumb({ scroll: w.scroll, viewport, total: w.total - 5 });
+    return div().id(`board-cards-${state.key}`).flex_1().min_h(0).relative().overflow_hidden()
+      .on_size_change((size, cx) => {
+        const h = size.height / (settings().zoom || 1);
+        if (h !== this.cardView[state.key]) { this.cardView[state.key] = h; cx.notify(); }
+      })
+      .on_scroll_wheel((e, cx) => { this.cardScroll[state.key] = wheelScroll(this.cardScroll[state.key] ?? 0, e.delta?.y ?? 0, w.maxScroll); cx.notify(); })
+      .children(rows.map(r => this.card(r.item, state, tabLabel, byId).absolute().top(r.top).left(0).right(0)))
+      .when(Boolean(thumb), el => el.child(div().absolute().right(0).w(4).rounded(2).bg(colors().line).top(thumb.top).h(thumb.height)));
   }
 }
