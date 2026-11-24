@@ -1,0 +1,24 @@
+// herdr 스텁: 테스트가 globalThis.__herdr 상태를 바꿔 가며 씁니다.
+const S = () => globalThis.__herdr;
+export const spaces = () => S().spaces ?? [];
+export const panes = () => S().panes ?? [];
+export const focused = () => S().focused ?? null;
+export const agents = () => S().agents ?? [];
+export const terminals = () => [];
+export const props = () => S().props ?? {};
+export const layout = () => S().layout ?? { id: "root", children: [] };
+export const theme = () => new Proxy({}, { get: (_t, k) => (typeof k === "string" ? `#${k}` : undefined) });
+export const settings = () => ({ font_family: "mono", zoom: 1 });
+export const window = () => ({ platform: S().platform ?? "macos" });
+export const checking = () => false;
+export const exec = (...args) => S().exec(...args);
+export const readTextFile = (...args) => S().readTextFile(...args);
+export const writeTextFile = async () => {};
+export const watchFolder = () => { const p = new Promise(() => {}); p.cancel = () => {}; return p; };
+export const shared = k => S().shared.get(k);
+export const setShared = (k, v) => S().shared.set(k, v);
+export const run = (...args) => (S().runs ??= []).push(args);
+export const setAgentOrder = order => (S().orders ??= []).push(order);
+export const notify = () => {}, openOverlay = () => {}, closeOverlay = () => {}, pickFolder = async () => null;
+export const nextCommand = () => new Promise(() => {});
+export const appHome = () => "/app", home = () => "/home/test", hc = async () => ({ code: 1, stdout: "" });
