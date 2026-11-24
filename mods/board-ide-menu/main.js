@@ -6,6 +6,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { props, exec, notify, window, closeOverlay, theme } from "herdr";
+import { tr } from "./_common/i18n.js";
 
 const IDES = [
   { id: "intellij", name: "IntelliJ IDEA", mac: "IntelliJ IDEA", cli: "idea" },
@@ -19,14 +20,14 @@ export default class IdeMenu extends View {
     const { folder, machine, overlay } = props();
     closeOverlay(overlay);
     if (!folder) return;
-    if (machine) { notify({ title: "원격 폴더는 IDE로 열 수 없습니다", body: folder, level: "error" }); return; }
+    if (machine) { notify({ title: tr("원격 폴더는 IDE로 열 수 없습니다", "Remote folders can't be opened in an IDE"), body: folder, level: "error" }); return; }
     const platform = window()?.platform;
     cx.spawn(async () => {
       try {
         if (platform === "windows" || platform === "linux") await exec(ide.cli, [folder]);
         else await exec("open", ["-a", ide.mac, folder]);
       } catch {
-        notify({ title: `${ide.name}을(를) 열 수 없습니다`, body: "설치 여부와 커맨드라인 실행 파일(PATH) 등록을 확인해주세요", level: "error" });
+        notify({ title: tr(`${ide.name}을(를) 열 수 없습니다`, `Could not open ${ide.name}`), body: tr("설치 여부와 커맨드라인 실행 파일(PATH) 등록을 확인해주세요", "Check that it's installed and its command-line launcher is on PATH"), level: "error" });
       }
     });
   }

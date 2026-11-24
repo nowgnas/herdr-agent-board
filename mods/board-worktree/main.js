@@ -5,6 +5,7 @@ import { defaultBase, worktreeArgs } from "./base.js";
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar } from "gpui-base";
 import { run, props, closeOverlay, theme, spaces, panes, exec, home, appHome, readTextFile, checking } from "herdr";
+import { tr } from "./_common/i18n.js";
 
 const options = () => props() ?? {};
 
@@ -140,7 +141,7 @@ export default class Worktree extends View {
     this.handle = cx.focus_handle();
     this.handle.focus(); // the root is mounted from the first frame: keep the keyboard here while loading
     if (options()?.action !== "remove") this.input.focus();
-    this.baseInput = InputState.new({ value: "", placeholder: "origin/main 또는 기준 브랜치" });
+    this.baseInput = InputState.new({ value: "", placeholder: tr("origin/main 또는 기준 브랜치", "origin/main or a base branch") });
     this.baseInput.on("change", (_e, cx) => { this.error = ""; cx.notify(); });
     this.baseInput.on("submit", (_e, cx) => this.go(cx));
     this.busy = false;
@@ -213,13 +214,13 @@ export default class Worktree extends View {
     const branch = this.text.trim();
     if (!branch) return "Type a branch name.";
     const valid = await git(this.repo.top, ["check-ref-format", "--branch", branch], this.on);
-    if (!valid.ok) return valid.err || "올바른 브랜치 이름을 입력하세요.";
+    if (!valid.ok) return valid.err || tr("올바른 브랜치 이름을 입력하세요.", "Enter a valid branch name.");
     const path = `${this.root}/${this.repo.name}/${slug(branch)}`;
     const exists = (await git(this.repo.main, ["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], this.on)).ok;
     const base = this.baseInput.value().trim();
     if (!exists && base) {
       const validBase = await git(this.repo.top, ["rev-parse", "--verify", "--end-of-options", `${base}^{commit}`], this.on);
-      if (!validBase.ok) return "기준 브랜치를 찾을 수 없습니다. 원격 ref를 fetch하거나 다른 기준을 입력하세요.";
+      if (!validBase.ok) return tr("기준 브랜치를 찾을 수 없습니다. 원격 ref를 fetch하거나 다른 기준을 입력하세요.", "Base branch not found. Fetch the remote ref or enter a different base.");
     }
     const add = worktreeArgs(branch, path, exists, base);
     const r = await git(this.repo.top, add, this.on, 600_000);
@@ -357,7 +358,7 @@ export default class Worktree extends View {
             ? !r.linked
               ? "This is the repository's main checkout, not a worktree."
               : `Closes the space and deletes ${tilde(r.top, this.userHome)}. The branch stays.`
-            : `A new space on a checkout in ${tilde(this.root, this.userHome)}/${r.name}/. 기존 브랜치는 그대로 열고 새 브랜치는 아래 기준에서 생성합니다.`;
+            : `A new space on a checkout in ${tilde(this.root, this.userHome)}/${r.name}/. ` + tr("기존 브랜치는 그대로 열고 새 브랜치는 아래 기준에서 생성합니다.", "An existing branch opens as-is; a new branch is created from the base below.");
     const blocked = !r || (remove && !r.linked);
     return v_flex()
       .id("worktree")
@@ -386,7 +387,7 @@ export default class Worktree extends View {
         ),
       )
       .when(!remove && !blocked, el => el
-        .child(div().text_size(11).text_color(t.muted).child("기준 브랜치 (로컬 원격 추적 ref: origin/main → origin/master)"))
+        .child(div().text_size(11).text_color(t.muted).child(tr("기준 브랜치 (로컬 원격 추적 ref: origin/main → origin/master)", "Base branch (local remote-tracking ref: origin/main → origin/master)")))
         .child(Input.new(this.baseInput).h(32).px(10).rounded(6).border(1).border_color(t.input)
           .bg(t.background).text_color(t.foreground)))
       .when(Boolean(this.error), (el) => el.child(div().text_color(t.blocked).child(this.error)))

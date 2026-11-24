@@ -5,6 +5,7 @@ import { spaces, panes, focused, exec, watchFolder, theme, window, shared, setSh
 import { createGitStatus, markOf } from "./_common/gitstatus.js";
 import { panelState } from "./_common/panel.js";
 import { FILES_PER_FOLDER, FILES_TOTAL, FILES_SAVED_LIMIT } from "./_common/limits.js";
+import { tr } from "./_common/i18n.js";
 
 function location() {
   const space = spaces().find(s => s.active), f = focused();
@@ -245,14 +246,14 @@ export default class Files extends View {
 
   openInBrowser(path, cx) {
     if (!path || !this.root) return;
-    if (this.on) { notify({ title: "원격 파일은 브라우저로 열 수 없습니다", body: path, level: "error" }); return; }
+    if (this.on) { notify({ title: tr("원격 파일은 브라우저로 열 수 없습니다", "Remote files can't be opened in a browser"), body: path, level: "error" }); return; }
     const abs = `${this.root}/${path}`, platform = window()?.platform;
     cx.spawn(async () => {
       try {
         if (platform === "windows") await exec("cmd", ["/c", "start", "", abs]);
         else if (platform === "linux") await exec("xdg-open", [abs]);
         else await exec("open", [abs]);
-      } catch (e) { notify({ title: "브라우저로 열기 실패", body: String(e), level: "error" }); }
+      } catch (e) { notify({ title: tr("브라우저로 열기 실패", "Failed to open in browser"), body: String(e), level: "error" }); }
     });
   }
 
@@ -298,20 +299,20 @@ export default class Files extends View {
     const ext = !entry.dir && path.includes(".") ? path.slice(path.lastIndexOf(".") + 1).toLowerCase() : "";
     const isHtml = !entry.dir && HTML_EXT.has(ext);
     return h_flex().id(`file-${path}`).h(28).flex_none().pl(14 + depth * 18).pr(8).gap(7).items_center().rounded(7).cursor_pointer().hover(s => s.bg(t.hover))
-      .tooltip(isHtml ? "클릭: 브라우저로 열기" : "")
+      .tooltip(isHtml ? tr("클릭: 브라우저로 열기", "Click: open in browser") : "")
       .on_click((_e, cx) => entry.dir ? this.toggle(path, cx) : isHtml ? this.openInBrowser(path, cx) : this.show(path, cx))
       .child(entry.dir ? svg(`mods/board-files/chevron-${open ? "down" : "right"}.svg`).size(12).flex_none().text_color(t.dim) : div().w(12).flex_none())
       .child(svg(`mods/board-files/${entry.dir ? "folder" : "file"}.svg`).size(14).flex_none().text_color(dirty ? t.blocked : t.muted))
       .child(div().flex_1().min_w(0).truncate().child(entry.name))
       .when(isHtml, el => el
         .child(div().id(`file-open-${path}`).flex_none().px(5).py(1).rounded(4).text_size(11).text_color(t.dim)
-          .hover(s => s.bg(t.selected)).tooltip("기본 브라우저로 열기")
+          .hover(s => s.bg(t.selected)).tooltip(tr("기본 브라우저로 열기", "Open in default browser"))
           .on_click((_e, cx) => { cx.stop_propagation(); this.openInBrowser(path, cx); }).child("↗"))
         .child(div().id(`file-src-${path}`).flex_none().px(5).py(1).rounded(4).text_size(10).text_color(t.dim)
-          .hover(s => s.bg(t.selected)).tooltip("소스 코드 보기")
+          .hover(s => s.bg(t.selected)).tooltip(tr("소스 코드 보기", "View source code"))
           .on_click((_e, cx) => { cx.stop_propagation(); this.show(path); }).child("</>")))
       .when(Boolean(mark), el => el.child(div().text_size(11).text_color(mark === "A" ? t.ansi2 : mark === "D" || mark === "U" ? t.ansi1 : t.blocked).child(mark)))
-      .when(Boolean(dirty) && !open, el => el.child(div().flex_none().px(4).py(0.5).rounded(3).bg(t.raised).text_size(9).text_color(t.blocked).tooltip(`변경된 파일 ${dirty}개`).child(String(dirty))));
+      .when(Boolean(dirty) && !open, el => el.child(div().flex_none().px(4).py(0.5).rounded(3).bg(t.raised).text_size(9).text_color(t.blocked).tooltip(tr(`변경된 파일 ${dirty}개`, `${dirty} changed files`)).child(String(dirty))));
   }
 
   render(cx) {
@@ -328,7 +329,7 @@ export default class Files extends View {
         .child(div().font_semibold().child("Files"))
         .child(div().flex_1().min_w(0).truncate().text_right().text_size(12).text_color(t.dim).child(this.root?.split(/[\\/]/).pop() ?? "")))
       .child(v_flex().id("files-tree").flex_1().min_h(0).overflow_y_scrollbar().children(rows.slice(0, this.visibleRows).map(row => this.row(row, t)))
-        .when(rows.length > this.visibleRows, el => el.child(div().id("files-more").p(8).cursor_pointer().text_size(12).text_color(t.muted).hover(s => s.bg(t.hover)).on_click((_e, cx) => { this.visibleRows += 200; cx.notify(); }).child(`더 보기 (${rows.length - this.visibleRows})`)))
+        .when(rows.length > this.visibleRows, el => el.child(div().id("files-more").p(8).cursor_pointer().text_size(12).text_color(t.muted).hover(s => s.bg(t.hover)).on_click((_e, cx) => { this.visibleRows += 200; cx.notify(); }).child(tr(`더 보기 (${rows.length - this.visibleRows})`, `More (${rows.length - this.visibleRows})`))))
         .when(Boolean(this.error) || (!rows.length && !this.limited), el => el.child(div().p(8).text_size(12).text_color(t.dim).child(this.error || (this.loading ? "Loading files…" : this.root ? "No files" : "No folder")))))
       .when(this.limited, el => el.child(div().p(8).text_size(11).text_color(t.dim).child("File list limited to 500 entries per folder and 5,000 total")));
   }

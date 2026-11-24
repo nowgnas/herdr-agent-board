@@ -34,8 +34,9 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, exec, readTextFile, writeTextFile, notify, home, run, checking, theme, layout, shared, setShared, pickFolder } from "herdr";
-import { STAGES, pickRandomPet, petById, stageForTotal, buildSprite } from "./pets.js";
+import { STAGES, pickRandomPet, petById, stageForTotal, buildSprite, petName, stageName } from "./pets.js";
 import { panelState } from "./_common/panel.js";
+import { lang, tr } from "./_common/i18n.js";
 
 // 기존 접힘 판정 그대로: (size.px ?? 170) < 70
 const PANEL = { defaultPx: 170, collapsedBelow: 70 };
@@ -65,10 +66,13 @@ function toggleLine(line) {
 function dateKey(d = new Date()) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+const MONTH_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function dateLabel(key) {
   const [y, m, d] = key.split("-").map(Number);
+  const day = new Date(y, m - 1, d).getDay();
+  if (lang() === "en") return `${MONTH_EN[m - 1]} ${d} (${["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][day]})`;
   const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
-  return `${m}월 ${d}일 (${WEEK[new Date(y, m - 1, d).getDay()]})`;
+  return `${m}월 ${d}일 (${WEEK[day]})`;
 }
 function dayDir(folder, key) {
   const [y, m] = key.split("-");
@@ -140,7 +144,7 @@ export default class Todo extends View {
         if (`${this.folder}|${this.today}` === key) {
           this.list = { ...parseList(text), text };
           if (!this.input) {
-            this.input = InputState.new({ value: "", placeholder: "오늘 할 일 추가" });
+            this.input = InputState.new({ value: "", placeholder: tr("오늘 할 일 추가", "Add a todo for today") });
             this.input.on("submit", (_e, cx) => this.addItem(cx));
           }
           this.petPath = petPath; this.pet = pet; this.petRaw = petText;
@@ -164,7 +168,7 @@ export default class Todo extends View {
     this.saveQueue = this.saveQueue
       .then(() => writeTextFile(path, text, expected))
       .catch(() => {
-        notify({ title: "todo 파일 저장 실패", body: today, level: "error" });
+        notify({ title: tr("todo 파일 저장 실패", "Failed to save todo file"), body: today, level: "error" });
         this.refresh(cx);
       });
   }
@@ -200,8 +204,11 @@ export default class Todo extends View {
       .then(() => {
         const after = stageForTotal(pet.total);
         if (after > before) {
-          const species = petById(pet.species);
-          notify({ title: `${species.name}가 "${STAGES[after].name}" 단계로 진화했어요!`, body: "todo를 계속 완료해서 더 키워보세요", level: "info" });
+          const species = petById(pet.species), name = petName(species), stage = stageName(STAGES[after]);
+          notify({
+            title: tr(`${name}가 "${stage}" 단계로 진화했어요!`, `${name} evolved into "${stage}"!`),
+            body: tr("todo를 계속 완료해서 더 키워보세요", "Keep completing todos to grow it further"), level: "info",
+          });
         }
       })
       .catch(() => this.refresh(cx));
@@ -209,7 +216,7 @@ export default class Todo extends View {
 
   chooseFolder(cx) {
     cx.spawn(async cx => {
-      const folder = await pickFolder({ prompt: "Todo 저장 폴더 선택" });
+      const folder = await pickFolder({ prompt: tr("Todo 저장 폴더 선택", "Choose a folder to save Todo") });
       if (!folder) return;
       setShared("board.todo.folder", folder);
       cx.notify();
@@ -229,7 +236,7 @@ export default class Todo extends View {
   }
 
   petCard(t) {
-    const species = petById(this.pet.species);
+    const species = petById(this.pet.species), name = petName(species);
     const total = this.pet.total ?? 0;
     const idx = stageForTotal(total);
     const stage = STAGES[idx];
@@ -243,12 +250,12 @@ export default class Todo extends View {
     return v_flex().id("todo-pet").flex_none().items_center().gap(4).p(8).mb(4).rounded(8).bg(t.canvas)
       .border_1().border_color(stage.aura ? species.color : t.border)
       .when(Boolean(stage.aura), el => el.shadow_sm())
-      .tooltip(`${species.name} · 완료한 todo ${total}개`)
+      .tooltip(tr(`${name} · 완료한 todo ${total}개`, `${name} · ${total} todos completed`))
       .child(sprite)
-      .child(div().text_size(10).font_semibold().text_color(t.foreground).child(`${species.name} · ${stage.name}`))
+      .child(div().text_size(10).font_semibold().text_color(t.foreground).child(`${name} · ${stageName(stage)}`))
       .child(h_flex().w_full().h(4).rounded(2).bg(t.raised).overflow_hidden()
         .child(div().h_full().rounded(2).bg(species.color).w(`${pct}%`)))
-      .child(div().text_size(8).text_color(t.dim).child(next ? `다음 진화까지 ${next.needs - total}개` : "최고 단계 달성"));
+      .child(div().text_size(8).text_color(t.dim).child(next ? tr(`다음 진화까지 ${next.needs - total}개`, `${next.needs - total} more to evolve`) : tr("최고 단계 달성", "Max stage reached")));
   }
 
   render(cx) {
@@ -260,18 +267,18 @@ export default class Todo extends View {
     const t = theme(), collapsed = state.collapsed;
     return v_flex().size_full().min_h(0).bg(t.canvas).border_t(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("todo-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
-        .tooltip(collapsed ? "Todo 펼치기" : "Todo 접기")
+        .tooltip(collapsed ? tr("Todo 펼치기", "Expand Todo") : tr("Todo 접기", "Collapse Todo"))
         .on_click(() => run("layout.resize", collapsed ? { id: "board-todo", weight: 170 } : { id: "board-todo", px: 26 }))
         .child(div().flex_1().text_size(10).font_semibold().child(`Todo · ${dateLabel(today)}`))
         .child(div().id("todo-folder-btn").text_size(11).text_color(t.muted).cursor_pointer().hover(s => s.text_color(t.foreground))
-          .tooltip(folder ? `저장 위치: ${folder}\n클릭하여 변경` : "저장 폴더 선택")
+          .tooltip(folder ? tr(`저장 위치: ${folder}\n클릭하여 변경`, `Save location: ${folder}\nClick to change`) : tr("저장 폴더 선택", "Choose save folder"))
           .on_click((_e, cx) => { cx.stop_propagation(); this.chooseFolder(cx); })
           .child("📁"))
         .child(div().text_color(t.muted).child(collapsed ? "▸" : "▾")))
       .when(!collapsed, el => el.child(v_flex().flex_1().min_h(0).p(8).gap(4).overflow_y_scrollbar()
-        .when(!folder, e => e.child(div().p(8).text_size(11).text_color(t.dim).child("props.folder가 설정되지 않았습니다")))
+        .when(!folder, e => e.child(div().p(8).text_size(11).text_color(t.dim).child(tr("props.folder가 설정되지 않았습니다", "props.folder is not set"))))
         .when(Boolean(folder) && Boolean(this.error), e => e.child(div().p(8).text_size(11).text_color(t.dim).child(this.error)))
-        .when(Boolean(folder) && !this.error && this.list === null, e => e.child(div().p(8).text_size(11).text_color(t.dim).child("불러오는 중…")))
+        .when(Boolean(folder) && !this.error && this.list === null, e => e.child(div().p(8).text_size(11).text_color(t.dim).child(tr("불러오는 중…", "Loading…"))))
         .when(Boolean(folder) && !this.error && Boolean(this.list), e => e
           .when(Boolean(this.pet), el2 => el2.child(this.petCard(t)))
           .children(this.list.rows.map(r => this.row(r, t)))

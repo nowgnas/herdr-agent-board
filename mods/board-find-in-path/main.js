@@ -8,6 +8,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, ScrollHandle } from "gpui-base";
 import { spaces, panes, focused, exec, readTextFile, run, setShared, theme, props, closeOverlay, checking } from "herdr";
+import { tr } from "./_common/i18n.js";
 
 function location() {
   const space = spaces().find(s => s.active), focus = focused();
@@ -46,7 +47,7 @@ function highlightSegments(text, query) {
 
 export default class FindInPath extends View {
   init(_props, cx) {
-    this.input = InputState.new({ placeholder: "경로 내 텍스트 검색…" });
+    this.input = InputState.new({ placeholder: tr("경로 내 텍스트 검색…", "Search text in path…") });
     this.input.on("change", (_e, cx) => { this.at = 0; this.listScroll.scroll_to_item(0); this.search(cx); });
     this.input.on("submit", (_e, cx) => this.open(this.rows()[this.at ?? 0], cx));
     this.input.focus();
@@ -66,7 +67,7 @@ export default class FindInPath extends View {
 
   resolveRoot(cx) {
     const loc = location();
-    if (loc.machine) { this.error = "원격 스페이스는 지원하지 않습니다"; cx.notify(); return; }
+    if (loc.machine) { this.error = tr("원격 스페이스는 지원하지 않습니다", "Remote spaces are not supported"); cx.notify(); return; }
     if (!loc.cwd || checking()) return;
     cx.spawn(async cx => {
       try {
@@ -103,12 +104,12 @@ export default class FindInPath extends View {
           // files, etc. sitting in the repo (e.g. herdr-app.sock) and grep errors out
           // on those instead of just skipping them.
           const ls = await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: this.root });
-          if (ls.code !== 0) throw new Error("파일 목록을 가져올 수 없습니다");
+          if (ls.code !== 0) throw new Error(tr("파일 목록을 가져올 수 없습니다", "Could not get file list"));
           const files = ls.stdout.split("\0").filter(Boolean).slice(0, 5000);
           result = files.length ? await exec("grep", ["-nF", "--", query, ...files], { cwd: this.root }) : { code: 1, stdout: "", stderr: "" };
         }
         if (gen !== this.gen) return;
-        if (result.code !== 0 && result.code !== 1) throw new Error(result.stderr || "검색 실패");
+        if (result.code !== 0 && result.code !== 1) throw new Error(result.stderr || tr("검색 실패", "Search failed"));
         const matches = [];
         for (const line of result.stdout.split("\n")) {
           if (!line) continue;
@@ -141,7 +142,7 @@ export default class FindInPath extends View {
     cx.spawn(async cx => {
       try {
         const text = await readTextFile(`${this.root}/${m.path}`);
-        if (text === null) throw new Error("파일을 열 수 없습니다");
+        if (text === null) throw new Error(tr("파일을 열 수 없습니다", "Could not open file"));
         const lines = text.split("\n");
         const start = Math.max(0, m.line - 1 - CONTEXT_BEFORE);
         const end = Math.min(lines.length, m.line + CONTEXT_AFTER);
@@ -184,7 +185,7 @@ export default class FindInPath extends View {
 
   renderContext(t, query) {
     if (this.contextError) return div().p(10).text_size(11).text_color(t.dim).child(this.contextError);
-    if (!this.context) return div().p(10).text_size(11).text_color(t.dim).child(this.rows().length ? "불러오는 중…" : "");
+    if (!this.context) return div().p(10).text_size(11).text_color(t.dim).child(this.rows().length ? tr("불러오는 중…", "Loading…") : "");
     return v_flex().size_full().min_h(0)
       .child(div().flex_none().px(10).py(6).border_b(1).border_color(t.border).text_size(11).text_color(t.dim).truncate().child(`${this.context.path}:${this.context.line}`))
       .child(v_flex().flex_1().min_h(0).py(4).overflow_y_scrollbar().overflow_x_scrollbar()
@@ -207,17 +208,17 @@ export default class FindInPath extends View {
         cx.notify();
       })
       .child(h_flex().items_center()
-        .child(div().flex_1().text_size(15).font_semibold().text_color(t.foreground).child("경로 내 검색"))
+        .child(div().flex_1().text_size(15).font_semibold().text_color(t.foreground).child(tr("경로 내 검색", "Find in Path")))
         .child(div().id("fip-esc").px(6).py(2).rounded(5).text_size(11).text_color(t.dim).cursor_pointer()
           .hover(s => s.bg(t.hover).text_color(t.foreground)).on_click(() => this.close()).child("Esc")))
       .child(h_flex().h(36).flex_none().px(10).gap(8).items_center().rounded(9).border_1().border_color(t.accent).bg(t.background)
         .child(Input.new(this.input).flex_1().h_full().text_size(12.8).text_color(t.foreground)))
       .when(Boolean(this.error), el => el.child(div().text_size(11).text_color(t.dim).child(this.error)))
-      .when(!this.error && Boolean(query) && this.matches === null, el => el.child(div().text_size(11).text_color(t.dim).child("검색 중…")))
+      .when(!this.error && Boolean(query) && this.matches === null, el => el.child(div().text_size(11).text_color(t.dim).child(tr("검색 중…", "Searching…"))))
       .when(!this.error && Boolean(this.matches), el => el.child(
         h_flex().h(440).flex_none().gap(10).mb(6)
           .child(v_flex().id("fip-list").track_scroll(this.listScroll).w(320).flex_none().h_full().min_h(0).overflow_y_scrollbar().border_1().border_color(t.border).rounded(7).py(4)
-            .when(rows.length === 0, e2 => e2.child(div().p(8).text_size(11).text_color(t.dim).child("일치하는 결과 없음")))
+            .when(rows.length === 0, e2 => e2.child(div().p(8).text_size(11).text_color(t.dim).child(tr("일치하는 결과 없음", "No matches"))))
             .children(rows.map((m, i) => this.row(m, i, i === this.at, t))))
           .child(v_flex().flex_1().h_full().min_h(0).border_1().border_color(t.border).rounded(7).bg(t.background)
             .child(this.renderContext(t, query)))));

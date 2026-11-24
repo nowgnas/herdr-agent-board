@@ -9,6 +9,7 @@ import { PICKER_SESSION_LIMIT } from "./_common/limits.js";
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { agents, spaces, terminals, run, hc, theme, settings, props, closeOverlay, openOverlay, shared, setShared, exec, appHome, checking, panes } from "herdr";
+import { tr } from "./_common/i18n.js";
 
 const MARK = { ansi6: "#22a99a", ansi3: "#e3814f", ansi4: "#5b8def", ansi5: "#8b7cf6", ansi2: "#3fae6a", ansi1: "#d9649a" };
 
@@ -39,7 +40,7 @@ function spaceColor(t, p) {
 export default class Picker extends View {
   init(_props, cx) {
     this.filter = "";
-    this.input = InputState.new({ placeholder: "탭, 스페이스 또는 Codex / Claude 세션 검색…" });
+    this.input = InputState.new({ placeholder: tr("탭, 스페이스 또는 Codex / Claude 세션 검색…", "Search tabs, spaces, or Codex / Claude sessions…") });
     this.input.on("change", (_e, cx) => {
       this.filter = this.input.value();
       this.at = this.filter ? Math.max(0, this.rows().filter(r => r.kind !== "head").findIndex(r => r.kind === "ctx")) : 0;
@@ -77,7 +78,7 @@ export default class Picker extends View {
     cx.spawn(async cx => {
       try {
         const result = await exec("python3", [`${appHome()}/mods/board-picker/sessions.py`, "--limit", String(limit)]);
-        if (result.code !== 0) throw new Error(result.stderr || "세션 목록을 읽을 수 없습니다");
+        if (result.code !== 0) throw new Error(result.stderr || tr("세션 목록을 읽을 수 없습니다", "Could not read the session list"));
         const data = JSON.parse(result.stdout);
         if (limit !== this.sessionLimit) return; // 더 큰 상한으로 다시 불러오는 중
         this.sessions = data.sessions ?? [];
@@ -167,13 +168,13 @@ export default class Picker extends View {
       cx?.notify();
       return;
     }
-    if (r.kind === "session" && !r.session.available) { this.sessionError = "세션의 폴더를 찾을 수 없습니다: " + r.session.cwd; cx?.notify(); return; }
+    if (r.kind === "session" && !r.session.available) { this.sessionError = tr("세션의 폴더를 찾을 수 없습니다: ", "Session folder not found: ") + r.session.cwd; cx?.notify(); return; }
     this.close();
     if (r.kind === "ctx") run("tab.select", { id: r.ctx.id });
     else if (r.kind === "session") {
       const s = r.session;
       if (s.available) run("space.new", { folder: s.cwd, machine: "", argv: s.kind === "Codex" ? ["codex", "resume", s.id] : ["claude", "--resume", s.id] });
-      else { this.sessionError = "세션의 폴더를 찾을 수 없습니다: " + s.cwd; cx?.notify(); }
+      else { this.sessionError = tr("세션의 폴더를 찾을 수 없습니다: ", "Session folder not found: ") + s.cwd; cx?.notify(); }
     }
     else if (r.kind === "new") run("tab.new");
     else if (r.kind === "space") run("space.new", { machine: r.machine ?? "" });
@@ -253,12 +254,12 @@ export default class Picker extends View {
           .when(on, el => el.bg(t.hover)).hover(el => el.bg(t.hover)).on_click((_e, cx) => this.go(r, cx))
           .child(h_flex().gap(8).items_center().child(div().text_size(11).text_color(t.accent).child(s.kind))
             .child(div().flex_1().min_w(0).truncate().text_color(s.available ? t.foreground : t.dim).child(s.title)))
-          .child(div().min_w(0).truncate().text_size(11).text_color(t.dim).child(s.cwd + (s.available ? "" : " (폴더 없음)")));
+          .child(div().min_w(0).truncate().text_size(11).text_color(t.dim).child(s.cwd + (s.available ? "" : tr(" (폴더 없음)", " (no folder)"))));
       }
       if (r.kind === "moreSessions") {
         return h_flex().id("pk-more-sessions").mx(4).px(10).h(32).items_center().rounded(7).gap(8).text_size(12).text_color(t.dim).cursor_pointer()
           .when(on, (el) => el.bg(t.hover)).hover((s) => s.bg(t.hover)).on_click((_e, cx) => this.go(r, cx))
-          .child(`세션 더 보기 · 최근 ${r.count}개 표시 중`);
+          .child(tr(`세션 더 보기 · 최근 ${r.count}개 표시 중`, `More sessions · showing ${r.count} recent`));
       }
       if (r.kind === "new" || r.kind === "space") {
         const label = r.kind === "new" ? "new tab" : r.machine ? `new space on ${r.machine}` : "new space";
@@ -329,7 +330,7 @@ export default class Picker extends View {
           .child(svg("mods/workspace-chrome/search.svg").size(15).text_color(t.dim))
           .child(Input.new(this.input).flex_1().h_full().text_size(12.8).text_color(t.foreground)),
       )
-      .when(Boolean(this.sessionError) || this.sessionsLoading, el => el.child(div().text_size(11).text_color(t.dim).child(this.sessionError || "세션 목록 불러오는 중…")))
+      .when(Boolean(this.sessionError) || this.sessionsLoading, el => el.child(div().text_size(11).text_color(t.dim).child(this.sessionError || tr("세션 목록 불러오는 중…", "Loading session list…"))))
       .child(
         v_flex()
           .id("pk-list")

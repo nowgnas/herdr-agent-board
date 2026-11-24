@@ -4,6 +4,7 @@ import { h_flex, v_flex, Scrollbar, InputState, Input } from "gpui-base";
 import { agents, spaces, panes, props, run, openOverlay, focused, theme, pickFolder, notify, setAgentOrder, layout, nextCommand, checking, settings } from "herdr";
 import { BOARD_VIRTUAL_MIN_CARDS } from "./_common/limits.js";
 import { virtualSlice, wheelScroll, scrollThumb } from "./_common/virtual.js";
+import { lang, setLang, tr } from "./_common/i18n.js";
 
 function findNode(node, id) {
   if (node?.id === id) return node;
@@ -33,7 +34,7 @@ const dot = (color, size = 7) => div().size(size).rounded(size).bg(color).flex_n
 const icon = (program, size = 18) => program?.icon
   ? (program.tint ? svg(program.icon).text_color(colors().ink) : image(program.icon)).size(size).flex_none()
   : div().size(size).rounded(4).bg(colors().violet);
-const STATUS_LABEL_KO = { blocked: "승인 대기", working: "작업 중", done: "완료", idle: "대기" };
+const STATUS_LABEL = { blocked: ["승인 대기", "Needs approval"], working: ["작업 중", "Working"], done: ["완료", "Done"], idle: ["대기", "Idle"] };
 // A stable color per worktree branch, so the same branch always tags the same way.
 const worktreeColor = branch => {
   if (!branch) return null;
@@ -52,7 +53,7 @@ export default class Board extends View {
     const role = props()?.role;
     if (role === undefined) {
       this.filterText = "";
-      this.filterInput = InputState.new({ value: "", placeholder: "검색 (탭 · 스페이스 · 프로그램 · 주소)" });
+      this.filterInput = InputState.new({ value: "", placeholder: tr("검색 (탭 · 스페이스 · 프로그램 · 주소)", "Search (tab · space · program · address)") });
       this.filterInput.on("change", (_e, cx) => { this.filterText = this.filterInput.value(); cx.notify(); });
       this.filterStatuses = new Set(states().map(s => s.key));
       this.filterBranches = new Set();
@@ -100,7 +101,7 @@ export default class Board extends View {
         .child(h_flex().gap(5).items_center().text_size(9).text_color(colors().muted)
           .when(Boolean(wColor), el => el.child(dot(wColor, 6).tooltip(branch)))
           .child(icon(a.program, 12)).child(div().truncate().child(a.program.name)).child(div().flex_1())
-          .child(div().px(4).py(1).rounded(3).bg(state.wash).text_size(8.5).font_semibold().text_color(state.color).child(STATUS_LABEL_KO[state.key])))
+          .child(div().px(4).py(1).rounded(3).bg(state.wash).text_size(8.5).font_semibold().text_color(state.color).child(tr(...STATUS_LABEL[state.key]))))
         .child(div().text_size(12).font_semibold().text_color(colors().ink).truncate().child(tabLabel(a.tab)))
         .child(h_flex().items_center().justify_between().gap(6).text_size(9).text_color(colors().muted)
           .child(div().min_w(0).truncate().child(a.space_name))
@@ -184,7 +185,7 @@ export default class Board extends View {
           this.filterText = ""; this.filterInput.set_value("");
           this.filterStatuses = new Set(states().map(s => s.key)); this.filterBranches = new Set();
           cx.notify();
-        }).child("초기화")));
+        }).child(tr("초기화", "Reset"))));
   }
   sidebar() {
     const sp = spaces(), ps = panes(), tabLabel = labelIndex(sp, ps), folderByTab = new Map();
@@ -199,7 +200,7 @@ export default class Board extends View {
         .when(Boolean(worktreeColor(space.branch)), el => el.child(dot(worktreeColor(space.branch), 6).tooltip(space.branch)))
         .child(div().flex_1().min_w(0).truncate().font_semibold().text_size(11).tooltip(space.name).child(space.name))
         .child(div().id(`add-session-${space.id}`).px(5).py(2).flex_none().rounded(3)
-          .tooltip("현재 폴더 세션 / 새 워크트리").hover(s => s.bg(theme().hover))
+          .tooltip(tr("현재 폴더 세션 / 새 워크트리", "New session in this folder / new worktree")).hover(s => s.bg(theme().hover))
           .on_click((_e, cx) => {
             cx.stop_propagation();
             openOverlay({ mod: "board-session", kind: "dialog", width: 540, height: 260,
@@ -219,12 +220,12 @@ export default class Board extends View {
       .child(h_flex().h(36).flex_none().px(10).items_center().justify_between()
         .child(div().font_semibold().text_size(11.5).child("Spaces & tabs"))
         .child(div().id("board-new-space").px(5).py(2).rounded(3).cursor_pointer()
-          .hover(s => s.bg(theme().selected)).tooltip("폴더를 선택해 스페이스 추가")
+          .hover(s => s.bg(theme().selected)).tooltip(tr("폴더를 선택해 스페이스 추가", "Pick a folder to add a space"))
           .on_click((_e, cx) => cx.spawn(async () => {
             try {
-              const folder = await pickFolder({ prompt: "스페이스로 열 폴더 선택" });
+              const folder = await pickFolder({ prompt: tr("스페이스로 열 폴더 선택", "Pick a folder to open as a space") });
               if (folder) run("space.new", { folder, machine: "" });
-            } catch (error) { notify({ title: "폴더를 열 수 없습니다", body: String(error), level: "error" }); }
+            } catch (error) { notify({ title: tr("폴더를 열 수 없습니다", "Could not open folder"), body: String(error), level: "error" }); }
           })).child("+")))
       .child(v_flex().flex_1().min_h(0).px(6).overflow_y_scrollbar().children(rows));
   }
@@ -244,15 +245,20 @@ export default class Board extends View {
         .child(div().text_size(10).text_color(colors().muted).child(`${list.length} agents across ${spaces().length} spaces`))
         .child(div().id("board-ide-open").px(7).py(4).rounded(4).cursor_pointer()
           .bg(colors().bg).text_size(10.5).text_color(colors().ink).hover(s => s.bg(theme().hover))
-          .tooltip("현재 작업 위치를 IDE로 열기")
+          .tooltip(tr("현재 작업 위치를 IDE로 열기", "Open the current location in an IDE"))
           .on_click(() => openOverlay({ mod: "board-ide-menu", kind: "popup", width: 190, height: 4 * 32 + 8,
             props: { folder: active ? spacePath(active) : null, machine: active?.machine ?? null } }))
-          .child("IDE로 열기"))
+          .child(tr("IDE로 열기", "Open in IDE")))
         .child(div().id("board-files-toggle").px(7).py(4).rounded(4).cursor_pointer()
           .bg(findNode(layout(), "board-files-column")?.hidden ? colors().bg : theme().selected)
           .text_size(10.5).text_color(colors().ink).hover(s => s.bg(theme().hover))
-          .tooltip("파일 사이드바 열기 / 접기 (⌘⇧B)")
-          .on_click(() => run("layout.toggle", { id: "board-files-column" })).child("Files")));
+          .tooltip(tr("파일 사이드바 열기 / 접기 (⌘⇧B)", "Show / hide the files sidebar (⌘⇧B)"))
+          .on_click(() => run("layout.toggle", { id: "board-files-column" })).child("Files"))
+        .child(h_flex().id("board-lang-toggle").flex_none().rounded(4).overflow_hidden().border(1).border_color(colors().line)
+          .tooltip(tr("언어 전환", "Switch language"))
+          .children(["ko", "en"].map(l => div().id(`board-lang-${l}`).px(6).py(4).cursor_pointer().text_size(9.5).font_semibold()
+            .bg(lang() === l ? theme().selected : colors().bg).text_color(lang() === l ? colors().ink : colors().muted)
+            .hover(s => s.bg(theme().hover)).on_click((_e, cx) => { setLang(l); cx.notify(); }).child(l.toUpperCase())))));
     if (role === "terminals") {
       const tab = active?.tabs.find(t => t.active), tabLabel = labelIndex(allSpaces, panes());
       return h_flex().size_full().px(10).items_center().gap(6).bg(colors().white)
@@ -265,7 +271,7 @@ export default class Board extends View {
         .child(icon(p?.program, 12)).child(div().text_size(10).text_color(colors().ink).child(p?.program?.name ?? "Terminal"))
         .child(div().flex_1()).child(dot(states().find(s => s.key === p?.status)?.color ?? colors().muted, 5))
         .when(Boolean(p && panes().filter(item => item.tab === p.tab).length > 1), el => el
-          .child(div().id(`board-pane-close-${p.pane}`).px(5).rounded(3).cursor_pointer().tooltip("패널 닫기")
+          .child(div().id(`board-pane-close-${p.pane}`).px(5).rounded(3).cursor_pointer().tooltip(tr("패널 닫기", "Close pane"))
             .hover(s => s.bg(theme().hover)).on_click((_e, cx) => { cx.stop_propagation(); run("pane.close", { pane: p.pane }); }).child("×")));
     }
     const columns = states(), tabLabel = labelIndex(allSpaces, panes()), byId = spaceIndex(allSpaces);

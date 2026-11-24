@@ -4,6 +4,7 @@ import { shared, setShared, readTextFile, exec, run, theme, settings, checking, 
 import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine, maxScrollX } from "./diff.js";
 import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
 import { wheelScroll, scrollThumb } from "./_common/virtual.js";
+import { tr } from "./_common/i18n.js";
 
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
 // 가상 스크롤 diff의 고정 행 높이와 12px 고정폭 글꼴의 대략적인 글자 폭(가로 스크롤 범위 추정)
@@ -75,7 +76,7 @@ export default class Preview extends View {
         }
         if (!isDiff) read = await readFileLimited(`${selection.root}/${selection.path}`, selection.on);
         if (this.key !== key || JSON.stringify(shared("board.preview")) !== key) return;
-        if (read === null) { this.error = wantDiff ? "삭제되었거나 더 이상 존재하지 않는 파일입니다" : "This file is no longer available"; return; }
+        if (read === null) { this.error = wantDiff ? tr("삭제되었거나 더 이상 존재하지 않는 파일입니다", "Deleted or no longer available") : "This file is no longer available"; return; }
         const { text, truncated } = read;
         if (!isDiff && text.includes("\0")) { this.error = "Binary file · no text preview"; return; }
         const ext = selection.path.includes(".") ? selection.path.split(".").pop().toLowerCase() : "txt";
@@ -136,9 +137,9 @@ export default class Preview extends View {
     return h_flex().flex_none().px(10).py(5).gap(8).items_center().border_t(1).border_color(t.border).text_size(11).text_color(t.dim)
       .when(hidden > 0, el => el.child(div().id("board-preview-more").px(6).py(2).rounded(4).cursor_pointer().text_color(t.muted).hover(s => s.bg(t.hover))
         .on_click((_e, cx) => { this.lineLimit += DIFF_MAX_LINES; this.maxCells = longestLine(this.diffLines, this.lineLimit); cx.notify(); })
-        .child(`+${hidden.toLocaleString()}줄 더`)))
+        .child(tr(`+${hidden.toLocaleString()}줄 더`, `+${hidden.toLocaleString()} more lines`))))
       .when(this.diffTruncated, el => el.child(div().flex_1().min_w(0).truncate()
-        .child(`diff가 ${DIFF_MAX_CHARS.toLocaleString()}자에서 잘렸습니다`)));
+        .child(tr(`diff가 ${DIFF_MAX_CHARS.toLocaleString()}자에서 잘렸습니다`, `diff truncated at ${DIFF_MAX_CHARS.toLocaleString()} chars`))));
   }
 
   renderDiff(t) {
@@ -183,10 +184,10 @@ export default class Preview extends View {
       .child(h_flex().h(36).flex_none().px(12).gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().flex_1().min_w(0).truncate().text_size(12).tooltip(selection?.path ?? "").child(selection?.path ?? "File"))
         .when(Boolean(selection?.diffable), el => el.child(div().id("board-preview-toggle").px(7).py(3).rounded(4).cursor_pointer().text_size(11).text_color(t.dim)
-          .hover(s => s.bg(t.hover)).tooltip(this.isDiff || this.preferFull ? "" : "diff 보기로 전환")
-          .on_click((_e, cx) => this.toggle(selection, cx)).child(this.preferFull ? "Diff 보기" : "전체 파일 보기")))
+          .hover(s => s.bg(t.hover)).tooltip(this.isDiff || this.preferFull ? "" : tr("diff 보기로 전환", "Switch to diff view"))
+          .on_click((_e, cx) => this.toggle(selection, cx)).child(this.preferFull ? tr("Diff 보기", "View diff") : tr("전체 파일 보기", "View full file"))))
         .child(div().id("board-preview-close").px(8).py(4).rounded(4).cursor_pointer().hover(s => s.bg(t.hover))
-          .tooltip("파일 미리보기 닫기").on_click(() => { setShared("board.preview", null); run("layout.hide", { id: "board-preview" }); }).child("×")))
+          .tooltip(tr("파일 미리보기 닫기", "Close file preview")).on_click(() => { setShared("board.preview", null); run("layout.hide", { id: "board-preview" }); }).child("×")))
       .child(this.isDiff && this.diffLines ? this.renderDiff(t)
         : this.code ? Editor.new(this.code).flex_1().min_h(0)
         : div().p(12).text_size(12).text_color(t.dim).child(this.error || (selection ? "Loading file…" : "Select a file")));

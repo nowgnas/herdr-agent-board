@@ -5,6 +5,7 @@ import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, focused, exec, run, setShared, checking, theme, layout } from "herdr";
 import { panelState } from "./_common/panel.js";
+import { tr } from "./_common/i18n.js";
 
 function location() {
   const space = spaces().find(s => s.active), focus = focused();
@@ -35,10 +36,10 @@ export default class Timeline extends View {
     cx.spawn(async cx => {
       try {
         const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: loc.cwd });
-        if (top.code !== 0) throw new Error("git 저장소가 아닙니다");
+        if (top.code !== 0) throw new Error(tr("git 저장소가 아닙니다", "Not a git repository"));
         const root = top.stdout.trim();
         const log = await exec("git", ["log", `-n${LIMIT}`, "--format=%h\x1f%an\x1f%ar\x1f%s"], { cwd: root });
-        if (log.code !== 0) throw new Error("git log 실패");
+        if (log.code !== 0) throw new Error(tr("git log 실패", "git log failed"));
         const commits = log.stdout.split("\n").filter(Boolean).map(line => {
           const [hash, author, when, subject] = line.split("\x1f");
           return { hash, author, when, subject };
@@ -94,12 +95,12 @@ export default class Timeline extends View {
       .child(h_flex().pl(16).gap(6).text_size(9).text_color(t.dim)
         .child(div().min_w(0).truncate().text_color(t.ansi4).child(c.author)).child(div().flex_none().child(`· ${c.when}`)))
       .when(open, el => el.child(v_flex().flex_none().pl(16).pt(1).gap(1)
-        .children(files === undefined ? [div().py(1.5).px(2).text_color(t.dim).child("불러오는 중…")]
+        .children(files === undefined ? [div().py(1.5).px(2).text_color(t.dim).child(tr("불러오는 중…", "Loading…"))]
           : files.length ? files.map(f => h_flex().id(`commit-file-${c.hash}-${f.path}`).gap(5).items_center().py(1.5).px(2).rounded(3).cursor_pointer().hover(s => s.bg(t.hover))
-            .tooltip(`${f.path}\n(현재 작업 트리 버전을 미리 봅니다)`).on_click(() => this.preview(f.path))
+            .tooltip(tr(`${f.path}\n(현재 작업 트리 버전을 미리 봅니다)`, `${f.path}\n(previews the current working-tree version)`)).on_click(() => this.preview(f.path))
             .child(div().flex_none().w(10).text_color(MARK_COLOR(t, f.status)).child(f.status))
             .child(div().flex_1().min_w(0).truncate().text_color(t.dim).child(f.path)))
-            : [div().py(1.5).px(2).text_color(t.dim).child("변경 파일 없음")])));
+            : [div().py(1.5).px(2).text_color(t.dim).child(tr("변경 파일 없음", "No changed files"))])));
   }
   render(cx) {
     const loc = location(), state = panelState(layout(), "board-timeline", PANEL);
@@ -109,15 +110,15 @@ export default class Timeline extends View {
     const t = theme(), collapsed = state.collapsed;
     return v_flex().size_full().min_h(0).bg(t.canvas).border_t(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("timeline-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
-        .tooltip(collapsed ? "최근 커밋 펼치기" : "최근 커밋 접기")
+        .tooltip(collapsed ? tr("최근 커밋 펼치기", "Expand recent commits") : tr("최근 커밋 접기", "Collapse recent commits"))
         .on_click(() => run("layout.resize", collapsed ? { id: "board-timeline", weight: 170 } : { id: "board-timeline", px: 26 }))
-        .child(div().flex_1().text_size(10).font_semibold().child("최근 커밋"))
+        .child(div().flex_1().text_size(10).font_semibold().child(tr("최근 커밋", "Recent commits")))
         .child(div().text_color(t.muted).child(collapsed ? "▸" : "▾")))
       .when(!collapsed, el => el.child(v_flex().flex_1().min_h(0).px(8).pb(6).gap(4).overflow_y_scrollbar().text_size(10)
-        .when(Boolean(loc.machine), e => e.child(div().text_color(t.muted).child("원격 세션은 관측할 수 없습니다")))
+        .when(Boolean(loc.machine), e => e.child(div().text_color(t.muted).child(tr("원격 세션은 관측할 수 없습니다", "Remote sessions can't be observed"))))
         .when(!loc.machine && Boolean(this.error), e => e.child(div().text_color(t.muted).child(this.error ?? "")))
-        .when(!loc.machine && !this.error && this.commits === null, e => e.child(div().text_color(t.muted).child(loc.cwd ? "커밋 기록 불러오는 중…" : "선택된 경로 없음")))
-        .when(!loc.machine && !this.error && Boolean(this.commits) && this.commits.length === 0, e => e.child(div().text_color(t.muted).child("커밋 기록이 없습니다")))
+        .when(!loc.machine && !this.error && this.commits === null, e => e.child(div().text_color(t.muted).child(loc.cwd ? tr("커밋 기록 불러오는 중…", "Loading commit history…") : tr("선택된 경로 없음", "No path selected"))))
+        .when(!loc.machine && !this.error && Boolean(this.commits) && this.commits.length === 0, e => e.child(div().text_color(t.muted).child(tr("커밋 기록이 없습니다", "No commit history"))))
         .when(!loc.machine && !this.error && Boolean(this.commits) && this.commits.length > 0, e => e.children(this.commits.map(c => this.row(c, t))))));
   }
 }

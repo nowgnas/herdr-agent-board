@@ -13,6 +13,7 @@ import { createGitStatus, markOf } from "./_common/gitstatus.js";
 import { panelState } from "./_common/panel.js";
 import { LIST_INITIAL, LIST_STEP, STATUS_LIMIT, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
 import { virtualSlice, wheelScroll, scrollThumb, nextLimit } from "./_common/virtual.js";
+import { tr } from "./_common/i18n.js";
 
 function location() {
   const space = spaces().find(s => s.active), focus = focused();
@@ -79,9 +80,9 @@ export default class Changes extends View {
     return h_flex().flex_none().gap(6).items_center().px(10).py(3).text_size(10).text_color(t.muted)
       .when(rest > 0, el => el.child(div().id("changes-more").px(4).py(1).rounded(4).cursor_pointer().hover(s => s.bg(t.hover))
         .on_click((_e, cx) => { this.limit = nextLimit(this.limit, this.items.length, LIST_STEP, STATUS_LIMIT); cx.notify(); })
-        .child(`+${rest.toLocaleString()}개 더`)))
+        .child(tr(`+${rest.toLocaleString()}개 더`, `+${rest.toLocaleString()} more`))))
       .when(rest <= 0 && beyond > 0, el => el.child(div().text_color(t.dim)
-        .child(`외 ${beyond.toLocaleString()}개는 표시하지 않음 (상한 ${STATUS_LIMIT.toLocaleString()}개)`)));
+        .child(tr(`외 ${beyond.toLocaleString()}개는 표시하지 않음 (상한 ${STATUS_LIMIT.toLocaleString()}개)`, `${beyond.toLocaleString()} more not shown (limit ${STATUS_LIMIT.toLocaleString()})`))));
   }
   virtualList(t) {
     const shown = Math.min(this.items.length, this.limit), items = this.items.length === shown ? this.items : this.items.slice(0, shown);
@@ -105,17 +106,17 @@ export default class Changes extends View {
     const virtual = ready && Math.min(this.items.length, this.limit) > VIRTUAL_MIN_ROWS;
     return v_flex().size_full().min_h(0).bg(t.canvas).border_b(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("changes-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
-        .tooltip(collapsed ? "변경된 파일 펼치기" : "변경된 파일 접기")
+        .tooltip(collapsed ? tr("변경된 파일 펼치기", "Expand changed files") : tr("변경된 파일 접기", "Collapse changed files"))
         .on_click(() => run("layout.resize", collapsed ? { id: "board-changes", px: 160 } : { id: "board-changes", px: 26 }))
-        .child(div().flex_1().text_size(10).font_semibold().child("변경된 파일"))
+        .child(div().flex_1().text_size(10).font_semibold().child(tr("변경된 파일", "Changed files")))
         .when(Boolean(this.items?.length), el => el.child(div().flex_none().px(4).py(0.5).rounded(3).bg(t.raised).text_size(9).text_color(t.blocked).child(String(this.total || this.items.length))))
         .child(div().text_color(t.muted).child(collapsed ? "▸" : "▾")))
       .when(!collapsed && virtual, el => el.child(this.virtualList(t)).child(v_flex().flex_none().pb(6).children([this.more(t)].filter(Boolean))))
       .when(!collapsed && !virtual, el => el.child(v_flex().flex_1().min_h(0).px(8).pb(6).gap(1).overflow_y_scrollbar().text_size(10)
-        .when(Boolean(loc.machine), e => e.child(div().text_color(t.muted).child("원격 세션은 관측할 수 없습니다")))
+        .when(Boolean(loc.machine), e => e.child(div().text_color(t.muted).child(tr("원격 세션은 관측할 수 없습니다", "Remote sessions can't be observed"))))
         .when(!loc.machine && Boolean(this.error), e => e.child(div().text_color(t.muted).child(this.error ?? "")))
-        .when(!loc.machine && !this.error && this.items === null, e => e.child(div().text_color(t.muted).child(loc.cwd ? "변경 사항 확인 중…" : "선택된 경로 없음")))
-        .when(!loc.machine && !this.error && Boolean(this.items) && this.items.length === 0, e => e.child(div().text_color(t.muted).child("변경된 파일이 없습니다")))
+        .when(!loc.machine && !this.error && this.items === null, e => e.child(div().text_color(t.muted).child(loc.cwd ? tr("변경 사항 확인 중…", "Checking for changes…") : tr("선택된 경로 없음", "No path selected"))))
+        .when(!loc.machine && !this.error && Boolean(this.items) && this.items.length === 0, e => e.child(div().text_color(t.muted).child(tr("변경된 파일이 없습니다", "No changed files"))))
         .when(ready, e => e.children(this.items.slice(0, this.limit).map(item => this.row(item, t))).children([this.more(t)].filter(Boolean)))));
   }
 }

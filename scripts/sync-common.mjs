@@ -9,14 +9,19 @@ export const ROOT = fileURLToPath(new URL("..", import.meta.url));
 export const SOURCE = join(ROOT, "mods", "board-common");
 // 모드 → 그 모드가 쓰는 공통 파일(원본 안의 상대 import까지 포함)
 export const COPIES = {
-  "board": ["limits.js", "virtual.js"],
-  "board-changes": ["gitstatus.js", "limits.js", "panel.js", "virtual.js"],
-  "board-files": ["gitstatus.js", "limits.js", "panel.js"],
-  "board-picker": ["limits.js"],
-  "board-preview": ["limits.js", "virtual.js"],
-  "board-timeline": ["panel.js"],
-  "board-todo": ["panel.js"],
-  "board-usage": ["panel.js"],
+  "board": ["limits.js", "virtual.js", "i18n.js"],
+  "board-changes": ["gitstatus.js", "limits.js", "panel.js", "virtual.js", "i18n.js"],
+  "board-files": ["gitstatus.js", "limits.js", "panel.js", "i18n.js"],
+  "board-find-in-path": ["i18n.js"],
+  "board-goto-file": ["i18n.js"],
+  "board-ide-menu": ["i18n.js"],
+  "board-picker": ["limits.js", "i18n.js"],
+  "board-preview": ["limits.js", "virtual.js", "i18n.js"],
+  "board-session": ["i18n.js"],
+  "board-timeline": ["panel.js", "i18n.js"],
+  "board-todo": ["panel.js", "i18n.js"],
+  "board-usage": ["panel.js", "i18n.js"],
+  "board-worktree": ["i18n.js"],
 };
 
 export function sync() {

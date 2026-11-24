@@ -4,6 +4,7 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, ScrollHandle } from "gpui-base";
 import { spaces, panes, focused, exec, run, setShared, theme, props, closeOverlay, checking } from "herdr";
+import { tr } from "./_common/i18n.js";
 
 function location() {
   const space = spaces().find(s => s.active), focus = focused();
@@ -35,7 +36,7 @@ function fuzzyScore(path, query) {
 
 export default class GotoFile extends View {
   init(_props, cx) {
-    this.input = InputState.new({ placeholder: "파일 이름으로 이동…" });
+    this.input = InputState.new({ placeholder: tr("파일 이름으로 이동…", "Go to file…") });
     this.listScroll = ScrollHandle.new();
     this.input.on("change", (_e, cx) => { this.at = 0; this.listScroll.scroll_to_item(0); cx.notify(); });
     this.input.on("submit", (_e, cx) => this.open(this.rows()[this.at ?? 0], cx));
@@ -51,15 +52,15 @@ export default class GotoFile extends View {
 
   load(cx) {
     const loc = location();
-    if (loc.machine) { this.error = "원격 스페이스는 지원하지 않습니다"; this.files = []; return; }
+    if (loc.machine) { this.error = tr("원격 스페이스는 지원하지 않습니다", "Remote spaces are not supported"); this.files = []; return; }
     if (!loc.cwd || checking()) return;
     cx.spawn(async cx => {
       try {
         const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: loc.cwd });
-        if (top.code !== 0) throw new Error("git 저장소가 아닙니다");
+        if (top.code !== 0) throw new Error(tr("git 저장소가 아닙니다", "Not a git repository"));
         this.root = top.stdout.trim();
         const ls = await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: this.root });
-        if (ls.code !== 0) throw new Error("파일 목록을 가져올 수 없습니다");
+        if (ls.code !== 0) throw new Error(tr("파일 목록을 가져올 수 없습니다", "Could not get file list"));
         this.files = ls.stdout.split("\0").filter(Boolean);
         this.error = null;
       } catch (e) { this.error = String(e); this.files = []; }
@@ -114,16 +115,16 @@ export default class GotoFile extends View {
         cx.notify();
       })
       .child(h_flex().items_center()
-        .child(div().flex_1().text_size(15).font_semibold().text_color(t.foreground).child("파일로 이동"))
+        .child(div().flex_1().text_size(15).font_semibold().text_color(t.foreground).child(tr("파일로 이동", "Go to File")))
         .child(div().id("goto-file-esc").px(6).py(2).rounded(5).text_size(11).text_color(t.dim).cursor_pointer()
           .hover(s => s.bg(t.hover).text_color(t.foreground)).on_click(() => this.close()).child("Esc")))
       .child(h_flex().h(36).flex_none().px(10).gap(8).items_center().rounded(9).border_1().border_color(t.accent).bg(t.background)
         .child(Input.new(this.input).flex_1().h_full().text_size(12.8).text_color(t.foreground)))
       .when(Boolean(this.error), el => el.child(div().text_size(11).text_color(t.dim).child(this.error)))
-      .when(!this.error && this.files === null, el => el.child(div().text_size(11).text_color(t.dim).child("파일 목록 불러오는 중…")))
+      .when(!this.error && this.files === null, el => el.child(div().text_size(11).text_color(t.dim).child(tr("파일 목록 불러오는 중…", "Loading file list…"))))
       .when(!this.error && this.files !== null, el => el.child(
         v_flex().id("goto-file-list").track_scroll(this.listScroll).h(Math.min(360, Math.max(28, rows.length * 28))).min_h(0).overflow_y_scrollbar().mb(6)
-          .when(rows.length === 0, e2 => e2.child(div().p(8).text_size(11).text_color(t.dim).child("일치하는 파일 없음")))
+          .when(rows.length === 0, e2 => e2.child(div().p(8).text_size(11).text_color(t.dim).child(tr("일치하는 파일 없음", "No matching files"))))
           .children(rows.map((path, i) => this.row(path, i, i === this.at, t)))));
   }
 }

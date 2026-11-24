@@ -14,27 +14,31 @@
 //   - add a new accessory shape by writing a paint function and adding it
 //     to ACCESSORY_PAINTERS.
 
+import { tr } from "./_common/i18n.js";
+
 export const PETS = [
-  { id: "igni", name: "이그니", color: "#e8603c", accent: "#ff8a3d", belly: "#ffe4cf", accessory: "flame" },
-  { id: "aqubi", name: "아쿠비", color: "#3b82c4", accent: "#8fd3ff", belly: "#eaf6ff", accessory: "fin" },
-  { id: "lopl", name: "로플", color: "#4caf6d", accent: "#8de39a", belly: "#eafff0", accessory: "leaf" },
-  { id: "volti", name: "볼티", color: "#e8c93c", accent: "#fff27a", belly: "#fffbe0", accessory: "spark" },
-  { id: "gromd", name: "그로드", color: "#8a6a4e", accent: "#c9a876", belly: "#efe2cf", accessory: "horn" },
-  { id: "frosty", name: "프로스티", color: "#a7d8e8", accent: "#eafcff", belly: "#ffffff", accessory: "shard" },
+  { id: "igni", name: "이그니", nameEn: "Ignis", color: "#e8603c", accent: "#ff8a3d", belly: "#ffe4cf", accessory: "flame" },
+  { id: "aqubi", name: "아쿠비", nameEn: "Aquabud", color: "#3b82c4", accent: "#8fd3ff", belly: "#eaf6ff", accessory: "fin" },
+  { id: "lopl", name: "로플", nameEn: "Leaflen", color: "#4caf6d", accent: "#8de39a", belly: "#eafff0", accessory: "leaf" },
+  { id: "volti", name: "볼티", nameEn: "Voltik", color: "#e8c93c", accent: "#fff27a", belly: "#fffbe0", accessory: "spark" },
+  { id: "gromd", name: "그로드", nameEn: "Groad", color: "#8a6a4e", accent: "#c9a876", belly: "#efe2cf", accessory: "horn" },
+  { id: "frosty", name: "프로스티", nameEn: "Frostie", color: "#a7d8e8", accent: "#eafcff", belly: "#ffffff", accessory: "shard" },
 ];
+export function petName(species) { return tr(species.name, species.nameEn); }
 
 // `needs`: cumulative completed todos required to reach this stage.
 // `key`: "egg" (unhatched) or "body" (the circular critter template).
 // `radius`/`cellPx`: how big the body circle is and how big each pixel is
 // drawn at — both grow with the stage so the sprite visibly gets bigger.
 export const STAGES = [
-  { name: "알", needs: 0, key: "egg", cellPx: 3 },
-  { name: "부화", needs: 3, key: "hatch", radius: 3.1, eyes: true, cellPx: 3 },
-  { name: "유년기", needs: 8, key: "body", radius: 3.7, eyes: true, cellPx: 4 },
-  { name: "성장기", needs: 16, key: "body", radius: 4.1, eyes: true, accessory: true, aura: true, cellPx: 4 },
-  { name: "성체", needs: 28, key: "body", radius: 4.5, eyes: true, accessory: true, belly: true, aura: true, cellPx: 5 },
-  { name: "전설", needs: 45, key: "body", radius: 4.8, eyes: true, accessory: true, belly: true, crown: true, sparkle: true, aura: true, cellPx: 6 },
+  { name: "알", nameEn: "Egg", needs: 0, key: "egg", cellPx: 3 },
+  { name: "부화", nameEn: "Hatchling", needs: 3, key: "hatch", radius: 3.1, eyes: true, cellPx: 3 },
+  { name: "유년기", nameEn: "Juvenile", needs: 8, key: "body", radius: 3.7, eyes: true, cellPx: 4 },
+  { name: "성장기", nameEn: "Adolescent", needs: 16, key: "body", radius: 4.1, eyes: true, accessory: true, aura: true, cellPx: 4 },
+  { name: "성체", nameEn: "Adult", needs: 28, key: "body", radius: 4.5, eyes: true, accessory: true, belly: true, aura: true, cellPx: 5 },
+  { name: "전설", nameEn: "Legendary", needs: 45, key: "body", radius: 4.8, eyes: true, accessory: true, belly: true, crown: true, sparkle: true, aura: true, cellPx: 6 },
 ];
+export function stageName(stage) { return tr(stage.name, stage.nameEn); }
 
 export function pickRandomPet() {
   return PETS[Math.floor(Math.random() * PETS.length)].id;

@@ -54,6 +54,7 @@ test("복사 목록은 모드가 실제 쓰는 공통 파일과 같다", () => {
     const root = join(MODS, mod);
     for (const file of jsFiles(root))
       for (const spec of specifiers(readFileSync(file, "utf8"))) {
+        if (BUILTINS.has(spec)) continue;
         const target = resolve(dirname(file), spec);
         if (target.startsWith(join(root, "_common") + sep)) used.add(relative(join(root, "_common"), target));
       }
