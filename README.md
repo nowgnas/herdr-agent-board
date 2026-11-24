@@ -9,6 +9,15 @@ changed, what it costs, and where to open it next.
 
 ## What it looks like
 
+![The board layout: agent columns, a live terminal, a diff of src/auth.js, changed files, the file tree, recent commits, skill cost, and today's todo](docs/screenshots/board.png)
+
+Spaces and the skill/cost panel sit on the left; the kanban, path tabs,
+live terminal and diff take the center; changed files, the file tree,
+recent commits and today's todo sit on the right. The screenshot is a
+filled demo workspace (`demo-app` / `docs-site`) — a few agent sessions,
+uncommitted changes, and a short commit history — not a production
+machine.
+
 ```
 ┌─ Spaces & tabs ─┬──────────── Agent board ─────────────┬─ Files ──────┐
 │                 │ Needs you │ Working │ Done │ Idle     │ Changed     │
@@ -54,9 +63,59 @@ changed, what it costs, and where to open it next.
 - **IDE로 열기 (Open in IDE)** — a header button that opens the current
   space's folder in IntelliJ IDEA, Rider, Cursor, or VS Code (`open -a`
   on macOS, the CLI launcher on Windows/Linux).
+- **경로 내 검색 (Find in Path)** — search the focused repo and preview
+  matching lines in a split popup, then jump to the file.
+- **파일로 이동 (Go to File)** — type a path fragment to open a file from the
+  focused repo.
+- **Todo** — today's checklist from a folder of markdown todo files,
+  shown under the commit timeline.
+- **세션 추가** — start a new tab in the current folder, or in a new git
+  worktree.
+- **KO / EN** — a header toggle switches the board chrome between Korean
+  and English.
 - **Worktree-aware** — spaces/tabs that are git worktrees get a color
   tag derived from their branch name, shared across the sidebar, path
   tabs, and filter bar.
+
+
+## Screenshots
+
+### Agent board, diff, and side panels
+
+The main shot above is the everyday view. Click a changed file (or a
+file in a commit) and the center-right pane shows a real `git diff HEAD`
+— colored +/- rows, old/new line numbers, and a light syntax highlighter
+— or toggle **전체 파일 보기** for the current file. The changed-files list is
+a flat view of every uncommitted path; the file tree underneath is lazy
+and marks `M`/`A`/`D`/`U` on files and on collapsed folders that contain
+changes.
+
+### Picker
+
+![The picker overlay listing spaces, tabs (with agent status), and recent Claude/Codex sessions](docs/screenshots/picker.png)
+
+`⌘P` (the `board-picker` binding in `keys.json`) jumps to a space, a
+tab, or a recent Codex/Claude session.
+
+### Find in Path
+
+![Find in Path: a search for isValidEmail with matching lines on the left and a file preview on the right](docs/screenshots/find-in-path.png)
+
+Search the focused repo. Matches are grouped by file; the right pane
+previews the selected hit.
+
+### Go to File
+
+![Go to File: the query auth listing auth.js and auth.test.js](docs/screenshots/goto-file.png)
+
+Type a path fragment to filter files in the focused repo and open one.
+
+### New session
+
+![New session dialog: start in the current folder or create a new git worktree](docs/screenshots/new-session.png)
+
+The session dialog offers a new tab in the current folder, or a new
+worktree when you want a branch of its own.
 
 ## Layout
 
@@ -80,6 +139,9 @@ changed, what it costs, and where to open it next.
 | `mods/board-picker` | `⌘P` mod/agent picker |
 | `mods/board-session` | new-session / worktree dialog |
 | `mods/board-worktree` | worktree base helper shared by the above |
+| `mods/board-todo` | today's markdown todo list under the commit timeline |
+| `mods/board-find-in-path` | repo-wide search with a split preview |
+| `mods/board-goto-file` | jump to a file by path fragment |
 | `mods/board-common` | single source of the shared limits, virtual-scroll math, panel state and `git status` helper (not a mod itself). Herdr only lets a mod import files inside its own folder, so each mod gets a byte-for-byte copy in `mods/<mod>/_common/` — edit `board-common`, then run `node scripts/sync-common.mjs`; a test fails if a copy drifts |
 
 Only this layout and these mods are tracked here — Herdr's own shipped

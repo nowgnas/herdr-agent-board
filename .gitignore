@@ -54,6 +54,11 @@
 mods/board*/jsconfig.json
 mods/board*/gpui-kit.d.ts
 
+# README 스크린샷
+!docs/
+!docs/screenshots/
+!docs/screenshots/**
+
 !README.md
 
 # Python 바이트코드(테스트·실행 시 생성)
