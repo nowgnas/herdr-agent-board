@@ -200,7 +200,7 @@ class UsageCacheTest(unittest.TestCase):
         for path in self.fx.files.values():
             os.utime(path, (later, later))
         self.collect(now=time.time())
-        cache_file = self.fx.cache / 'usage-v1.json'
+        cache_file = self.fx.cache / 'usage-v2.json'
         month_before = json.loads(cache_file.read_text())['month']
         result = self.collect(now=next_month(time.time(), day=3))
         self.assertEqual(result['_cache']['parsed'], 5)
@@ -213,12 +213,12 @@ class UsageCacheTest(unittest.TestCase):
         result = self.collect()
         self.assertEqual(result['_cache']['parsed'], 4)
         self.assertEqual(strip(result), self.legacy(self.fx.proj))
-        data = json.loads((self.fx.cache / 'usage-v1.json').read_text())
+        data = json.loads((self.fx.cache / 'usage-v2.json').read_text())
         self.assertEqual(len(data['files']), 4)
 
     def test_캐시에는_세션_본문이나_경로를_평문으로_두지_않는다(self):
         self.collect()
-        text = (self.fx.cache / 'usage-v1.json').read_text()
+        text = (self.fx.cache / 'usage-v2.json').read_text()
         for secret in (str(self.fx.proj), str(self.fx.other), str(self.fx.home), 'forge task', '안녕', 'a.jsonl'):
             self.assertNotIn(secret, text)
         self.assertIn('review:pr', text)  # 스킬 이름 집계만 남음
@@ -227,11 +227,11 @@ class UsageCacheTest(unittest.TestCase):
         out = subprocess.run([sys.executable, '-I', str(SCRIPT), str(self.fx.proj)], env=self.fx.env(), capture_output=True, text=True, check=True)
         data = json.loads(out.stdout)
         self.assertEqual(strip(data), self.legacy(self.fx.proj))
-        self.assertTrue((self.fx.cache / 'usage-v1.json').exists())
+        self.assertTrue((self.fx.cache / 'usage-v2.json').exists())
 
     def test_캐시가_깨져_있어도_다시_만든다(self):
         self.fx.cache.mkdir(parents=True)
-        (self.fx.cache / 'usage-v1.json').write_text('{broken')
+        (self.fx.cache / 'usage-v2.json').write_text('{broken')
         self.assertEqual(strip(self.collect()), self.legacy(self.fx.proj))
 
 

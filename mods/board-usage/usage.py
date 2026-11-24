@@ -3,7 +3,7 @@
 usage.py <경로>  →  JSON(기존 형식 그대로) 출력.
 
 실행은 프로세스 단위라 메모리 캐시가 남지 않으므로, 세션 파일별 집계만 캐시 파일
-(기본 ~/.cache/herdr-agent-board/usage-v1.json, HERDR_AGENT_BOARD_CACHE 또는
+(기본 ~/.cache/herdr-agent-board/usage-v2.json, HERDR_AGENT_BOARD_CACHE 또는
 XDG_CACHE_HOME로 변경)에 저장합니다. 파일의 mtime·size가 같으면 다시 파싱하지 않고,
 달이 바뀌면 캐시 전체를 버립니다. 캐시에는 세션 본문·명령·경로를 평문으로 두지 않습니다:
 파일 키와 cwd는 해시(cwd는 조상 경로 해시 목록)로만, 그 밖에는 비용·스킬 이름·사용 여부만.
@@ -13,7 +13,7 @@ import glob, hashlib, json, os, re, sys, tempfile, time
 from collections import Counter
 from pathlib import Path
 
-CACHE_VERSION = 1
+CACHE_VERSION = 2
 CACHE_NAME = f'usage-v{CACHE_VERSION}.json'
 forge_command = re.compile(r'(?:^|[;&|\s`])(?:\S*/)?forge\s+(?:task|gate|verify|card|resume|risk|confirm-plan|approve|pr|vault|mcp)(?:\s|$)')
 SKILL_NAME = re.compile(r'[\w:./-]{1,120}')
@@ -155,7 +155,7 @@ def parse_claude_file(filename, realpath=None):
                 if name.startswith('mcp__forge__') or (name == 'Bash' and isinstance(args, dict) and forge_command.search(str(args.get('command', '')))):
                     used_forge = True
     places = sorted({h for path in cwds for h in ancestor_hashes(path)})
-    return {'cost': cost, 'skill': used_skill, 'forge': used_forge, 'skills': skill_names, 'places': places}
+    return {'cost': cost, 'skill': used_skill, 'forge': used_forge, 'skills': dict(Counter(skill_names)), 'places': places}
 
 
 def parse_codex_file(filename, realpath=None):
@@ -192,7 +192,7 @@ def parse_codex_file(filename, realpath=None):
             if names: used_skill = True; skill_names.extend(names)
             if forge_command.search(text): used_forge = True
     places = ancestor_hashes(place) if place else []
-    return {'cost': cost, 'skill': used_skill, 'forge': used_forge, 'skills': skill_names, 'places': places}
+    return {'cost': cost, 'skill': used_skill, 'forge': used_forge, 'skills': dict(Counter(skill_names)), 'places': places}
 
 
 def cache_dir_default(home):
@@ -255,7 +255,7 @@ def summarize(records, errors, root_hash):
             sessions += 1
             skills += r['skill']
             forge += r['forge']
-            counts.update(r['skills'])
+            counts.update(r['skills'])  # 파일별 {이름: 횟수}, 처음 나온 순서 유지(동률 순서도 기존과 같음)
             total_cost += r['cost']
     return {'sessions': sessions, 'skill_sessions': skills, 'forge_sessions': forge, 'top': counts.most_common(3), 'errors': errors,
             'cost_usd': round(total_cost, 2), 'account_cost_usd': round(account_cost, 2)}

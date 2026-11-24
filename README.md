@@ -146,7 +146,7 @@ section (not tracked here, since it's a single shared file):
   few seconds), instead of each running its own.
 - **Usage estimate cache** — `board-usage` keeps per-session-file aggregates
   (cost, skill names, used-or-not flags; file names and folders only as
-  hashes) in `~/.cache/herdr-agent-board/usage-v1.json` (or
+  hashes) in `~/.cache/herdr-agent-board/usage-v2.json` (or
   `$XDG_CACHE_HOME/herdr-agent-board/`, or `$HERDR_AGENT_BOARD_CACHE`).
   Unchanged files (same mtime and size) aren't re-read; the cache resets
   each month. Delete the file any time; it's rebuilt on the next refresh.
