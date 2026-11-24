@@ -222,6 +222,27 @@ test("usage: 실행 중 경로를 여러 번 바꿔도 python은 하나, 끝난 
   assert.equal(calls.length, 2);
 });
 
+test("usage: 경로 정규화는 끝 슬래시만 떼고 루트·Windows 드라이브 루트는 보존", async () => {
+  const { normalize } = await import("../mods/board-usage/main.js");
+  assert.equal(normalize("C:\\"), "C:\\");
+  assert.equal(normalize("C:/"), "C:/");
+  assert.equal(normalize("C:\\\\"), "C:\\");
+  assert.equal(normalize("C:\\work\\"), "C:\\work");
+  assert.equal(normalize("/"), "/");
+  assert.equal(normalize("/a/b/"), "/a/b");
+  assert.equal(normalize(""), "");
+});
+
+test("usage: Windows 드라이브 루트를 python에 그대로 넘긴다", async () => {
+  globalThis.__herdr.layout = { id: "root", children: [{ id: "board-usage", size: { px: 190 } }] };
+  globalThis.__herdr.panes[0].cwd = "C:\\";
+  globalThis.__herdr.exec = async (cmd, args) => { calls.push([cmd, ...args]); return { code: 0, stdout: JSON.stringify({ sessions: 0, codex: {} }) }; };
+  const { default: Usage } = await import("../mods/board-usage/main.js");
+  const view = new Usage(), cx = makeCx();
+  view.init({}, cx); await cx.settle();
+  assert.equal(calls[0].at(-1), "C:\\");
+});
+
 test("files: 경로별 펼침 상태 saved는 최근 20개만", async () => {
   globalThis.__herdr.exec = async (cmd, args) => (cmd === "sh" ? { code: 0, stdout: "", stderr: "" } : { code: 128, stdout: "", stderr: "" });
   const { default: Files } = await import("../mods/board-files/main.js");

@@ -9,7 +9,13 @@ function current() {
   return { cwd: pane?.cwd || focus?.cwd || space?.folder || "", machine: space?.machine ?? null };
 }
 // 캐시 키는 정규화된 경로(끝 슬래시 제거). 집계 기준은 기존처럼 "현재 경로"입니다.
-const normalize = p => (p && p.length > 1 ? p.replace(/[\\/]+$/, "") || p : p);
+// 루트("/", Windows 드라이브 루트 "C:\")는 그대로 둡니다("C:"는 드라이브 상대경로라 뜻이 달라짐).
+export function normalize(p) {
+  if (!p || p.length <= 1) return p;
+  const drive = /^([A-Za-z]:)([\\/])[\\/]*$/.exec(p);
+  if (drive) return drive[1] + drive[2];
+  return p.replace(/[\\/]+$/, "") || p;
+}
 const EVERY = 120000, REMEMBER = 8;
 // 기존 접힘 판정 그대로: (size.px ?? 190) < 80
 const PANEL = { defaultPx: 190, collapsedBelow: 80 };
