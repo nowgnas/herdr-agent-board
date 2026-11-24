@@ -197,7 +197,6 @@ export default class Files extends View {
         const snap = await git.status(cwd, on);
         if (!this.current(context)) return;
         this.gitRoot = snap.root;
-        if (snap.busy) { this.gitAt = 0; cx.timer.after(1000, cx => this.refreshGit(cx)); return; }
         changed = this.applyMarks(snap);
       } catch {
         // git 저장소가 아니거나 status 실패: 기존처럼 표시 없음

@@ -19,7 +19,7 @@ function location() {
   const pane = panes().find(p => p.pane === focus?.pane);
   return { cwd: pane?.cwd || focus?.cwd || space?.folder || "", machine: space?.machine ?? null };
 }
-const STATUS_EVERY = 10000, BUSY_RETRY = 1000, ROW_H = 18;
+const STATUS_EVERY = 10000, ROW_H = 18;
 // 기존 접힘 판정 그대로: (size.px ?? 160) < 70
 const PANEL = { defaultPx: 160, collapsedBelow: 70 };
 const MARK_COLOR = (t, mark) => mark === "A" ? t.ansi2 : mark === "D" || mark === "U" ? t.ansi1 : t.blocked;
@@ -45,7 +45,6 @@ export default class Changes extends View {
       let changed = false;
       try {
         const snap = await git.status(loc.cwd, null);
-        if (snap.busy) { cx.timer.after(BUSY_RETRY, cx => this.refresh(cx)); return; }
         if (this.key === key) changed = this.apply(snap);
       } catch (e) {
         if (this.key === key && (this.error !== String(e) || this.items !== null)) { this.error = String(e); this.items = null; this.sig = null; changed = true; }

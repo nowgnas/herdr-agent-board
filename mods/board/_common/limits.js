@@ -24,6 +24,5 @@ export const PICKER_SESSION_LIMIT = 200;
 // board 카드 열: 이 개수를 넘는 열만 가상 스크롤
 export const BOARD_VIRTUAL_MIN_CARDS = 40;
 
-// git status 공유 캐시 수명(ms)과 다른 모드의 실행 중 표시 유효 시간
+// git status 결과 재사용 수명(ms)
 export const STATUS_TTL = 5000;
-export const STATUS_PENDING_TTL = 15000;

@@ -43,7 +43,11 @@ function env({ statusOut = Z(3), layout } = {}) {
     statusOut,
   };
 }
-beforeEach(() => env());
+// git status 실행 상태·TTL은 모듈 메모리에 남으므로, 테스트마다 시계를 1분씩 앞당겨 이전 결과를 만료시킵니다.
+const realNow = Date.now.bind(Date);
+let clockOffset = 0;
+Date.now = () => realNow() + clockOffset;
+beforeEach(() => { clockOffset += 60000; env(); });
 
 test("changes: 변경 파일이 적으면 기존처럼 전부 그린다", async () => {
   const { default: Changes } = await import("../mods/board-changes/main.js");

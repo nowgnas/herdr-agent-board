@@ -143,7 +143,10 @@ section (not tracked here, since it's a single shared file):
   diff sideways). All limits live in `mods/board-common/limits.js` (copied into each mod's `_common/`).
 - **Shared `git status`** — the changed-files panel and the file tree share
   one `git rev-parse`/`git status --untracked-files=all` per repo (cached a
-  few seconds), instead of each running its own.
+  few seconds), instead of each running its own. In-flight runs and TTLs live
+  in module memory; the shared `board.git.status` snapshot is only rewritten
+  when the result actually changes (a shared-state write refreshes and saves
+  every mod), and a late result never replaces a newer one.
 - **Usage estimate cache** — `board-usage` keeps per-session-file aggregates
   (cost, skill names, used-or-not flags; file names and folders only as
   hashes) in `~/.cache/herdr-agent-board/usage-v2.json` (or
