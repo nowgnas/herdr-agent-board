@@ -4,18 +4,16 @@
 import { View, div, svg } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, focused, exec, run, setShared, checking, theme, layout } from "herdr";
+import { panelState } from "./_common/panel.js";
 
-function node(root, id) {
-  if (root?.id === id) return root;
-  for (const child of root?.children ?? []) { const found = node(child, id); if (found) return found; }
-  return null;
-}
 function location() {
   const space = spaces().find(s => s.active), focus = focused();
   const pane = panes().find(p => p.pane === focus?.pane);
   return { cwd: pane?.cwd || focus?.cwd || space?.folder || "", machine: space?.machine ?? null };
 }
 const STATUS_EVERY = 60000, LIMIT = 30;
+// 기존 접힘 판정 그대로: (size.px ?? 170) < 80
+const PANEL = { defaultPx: 170, collapsedBelow: 80 };
 const MARK_COLOR = (t, status) => status === "A" ? t.ansi2 : status === "D" ? t.ansi1 : t.blocked;
 
 export default class Timeline extends View {
@@ -23,8 +21,9 @@ export default class Timeline extends View {
     this.expanded = new Set();
     this.filesByHash = new Map();
     this.refresh(cx);
-    cx.timer.every(STATUS_EVERY, cx => this.refresh(cx));
+    cx.timer.every(STATUS_EVERY, cx => { if (this.active()) this.refresh(cx); });
   }
+  active() { return panelState(layout(), "board-timeline", PANEL).active; }
   refresh(cx) {
     const loc = location(), key = JSON.stringify(loc);
     if (key !== this.key) {
@@ -44,9 +43,19 @@ export default class Timeline extends View {
           const [hash, author, when, subject] = line.split("\x1f");
           return { hash, author, when, subject };
         });
-        if (this.key === key) { this.root = root; this.commits = commits; this.error = null; }
+        if (this.key === key) {
+          this.root = root; this.commits = commits; this.error = null;
+          // 최근 LIMIT개 커밋에 없는 파일 목록·펼침 상태는 버립니다.
+          const live = new Set(commits.map(c => c.hash));
+          for (const hash of [...this.filesByHash.keys()]) if (!live.has(hash)) this.filesByHash.delete(hash);
+          for (const hash of [...this.expanded]) if (!live.has(hash)) this.expanded.delete(hash);
+        }
       } catch (e) { if (this.key === key) { this.error = String(e); this.commits = null; } }
-      finally { this.loading = false; cx.notify(); }
+      finally {
+        this.loading = false; cx.notify();
+        // 실행 중에 경로가 바뀌었으면 한 주기를 기다리지 않고 새 경로로 바로 다시 조회
+        if (JSON.stringify(location()) !== key) this.refresh(cx);
+      }
     });
   }
   toggle(hash, cx) {
@@ -93,9 +102,11 @@ export default class Timeline extends View {
             : [div().py(1.5).px(2).text_color(t.dim).child("변경 파일 없음")])));
   }
   render(cx) {
-    const loc = location();
+    const loc = location(), state = panelState(layout(), "board-timeline", PANEL);
     if (JSON.stringify(loc) !== this.key) this.refresh(cx);
-    const t = theme(), collapsed = (node(layout(), "board-timeline")?.size?.px ?? 170) < 80;
+    else if (state.active && this.wasActive === false) this.refresh(cx); // 다시 펼치면 바로 갱신
+    this.wasActive = state.active;
+    const t = theme(), collapsed = state.collapsed;
     return v_flex().size_full().min_h(0).bg(t.canvas).border_t(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("timeline-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
         .tooltip(collapsed ? "최근 커밋 펼치기" : "최근 커밋 접기")

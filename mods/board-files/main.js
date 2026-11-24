@@ -1,7 +1,10 @@
 // A lazy file browser for the focused pane's folder, with bounded read-only previews.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { spaces, panes, focused, exec, watchFolder, theme, window, setShared, run, notify } from "herdr";
+import { spaces, panes, focused, exec, watchFolder, theme, window, shared, setShared, run, notify, layout } from "herdr";
+import { createGitStatus, markOf } from "./_common/gitstatus.js";
+import { panelState } from "./_common/panel.js";
+import { FILES_PER_FOLDER, FILES_TOTAL, FILES_SAVED_LIMIT } from "./_common/limits.js";
 
 function location() {
   const space = spaces().find(s => s.active), f = focused();
@@ -11,7 +14,11 @@ function location() {
 }
 const key = () => JSON.stringify(location());
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
-const PER_FOLDER = 500, TOTAL = 5000;
+const PER_FOLDER = FILES_PER_FOLDER, TOTAL = FILES_TOTAL;
+// watch가 없거나(원격·실패) 할 때: 10초마다 루트만, FULL_EVERY번째마다 열린 폴더 전부
+const POLL_EVERY = 10000, FULL_EVERY = 6, GIT_EVERY = 30000;
+// git rev-parse/status는 board-changes와 공유(같은 저장소면 한 번만 실행)
+const git = createGitStatus({ exec, shared, setShared });
 const HTML_EXT = new Set(["html", "htm"]);
 
 async function directory(path, on) {
@@ -44,11 +51,43 @@ export default class Files extends View {
     this.saved = new Map();
     this.visibleRows = 200;
     this.entries = new Map(); this.folders = new Set(); this.pending = new Set(); this.marks = {};
+    this.entryTotal = 0; this.version = 0; this.ticks = 0;
     this.refresh(cx);
-    cx.timer.every(10000, cx => {
-      if (this.on || !this.watched) this.queueRefresh(null, cx);
+    cx.timer.every(POLL_EVERY, cx => {
+      if (!this.active()) return; // 파일 사이드바가 숨겨지면 폴링하지 않음
+      if (this.on || !this.watched) {
+        // 열린 폴더 전부를 매번 다시 나열하지 않고, 평소엔 루트만 갱신
+        if (++this.ticks % FULL_EVERY === 0) this.queueRefresh(null, cx);
+        else this.queueFolders([""], cx);
+      }
       this.refreshGit(cx);
     });
+  }
+
+  active() { return panelState(layout(), "board-files", {}).active; }
+
+  // 경로별 펼침 상태는 최근 FILES_SAVED_LIMIT개만(LRU)
+  remember(key, value) {
+    this.saved.delete(key);
+    this.saved.set(key, value);
+    while (this.saved.size > FILES_SAVED_LIMIT) this.saved.delete(this.saved.keys().next().value);
+  }
+
+  setEntries(path, list) {
+    this.entryTotal += list.length - (this.entries.get(path)?.length ?? 0);
+    this.entries.set(path, list);
+    this.version++;
+  }
+  deleteEntries(path) {
+    if (!this.entries.has(path)) return;
+    this.entryTotal -= this.entries.get(path).length;
+    this.entries.delete(path);
+    this.version++;
+  }
+
+  queueFolders(folders, cx) {
+    for (const folder of folders) this.dirty.add(folder);
+    this.queueRefresh([], cx);
   }
 
   watch(root, cx) {
@@ -100,8 +139,8 @@ export default class Files extends View {
     const { on, cwd: root } = context;
     const entries = await directory(path ? `${root}/${path}` : root, on);
     if (!this.current(context) || (path && !this.folders.has(path))) return;
-    const used = [...this.entries.entries()].filter(([p]) => p !== path).reduce((n, [, e]) => n + e.length, 0);
-    this.entries.set(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name)));
+    const used = this.entryTotal - (this.entries.get(path)?.length ?? 0);
+    this.setEntries(path, entries.slice(0, Math.max(0, Math.min(PER_FOLDER, TOTAL - used))).sort((a, b) => Number(b.dir) - Number(a.dir) || a.name.localeCompare(b.name)));
     if (entries.length > PER_FOLDER || used + entries.length > TOTAL) this.limited = true;
   }
 
@@ -109,10 +148,11 @@ export default class Files extends View {
     const { cwd, on } = location(), next = key();
     if (next !== this.context?.key) {
       this.watchRequest?.cancel(); this.watchRequest = null;
-      if (this.context) this.saved.set(this.context.key, { folders: this.folders });
+      if (this.context) this.remember(this.context.key, { folders: this.folders });
       const saved = this.saved.get(next);
       this.context = { key: next, cwd, on }; this.root = cwd; this.on = on;
       this.entries = new Map(); this.folders = new Set(saved?.folders); this.pending = new Set();
+      this.entryTotal = 0; this.version++; this.gitSig = null; this.ticks = 0;
       this.marks = {}; this.watched = null; this.error = null; this.limited = false; this.visibleRows = 200;
       this.loading = false; this.gitLoading = false; this.gitAt = 0; this.queued = false;
       this.dirty = new Set(); this.dirtyAll = true;
@@ -140,36 +180,49 @@ export default class Files extends View {
     });
   }
 
+  // 같은 저장소의 status는 board-changes와 공유합니다. GIT_EVERY 안에서는 새로 실행하지 않고
+  // 다른 모드가 받아 둔 최신 스냅샷만 반영합니다. 결과가 같으면 marks/행을 다시 만들지 않습니다.
   refreshGit(cx) {
     const context = this.context, cwd = context?.cwd, on = context?.on;
-    if (!cwd || this.gitLoading || Date.now() - this.gitAt < 30000) return;
+    if (!cwd || this.gitLoading) return;
+    if (Date.now() - this.gitAt < GIT_EVERY) {
+      const snap = this.gitRoot ? git.snapshot(this.gitRoot, on) : null;
+      if (snap && this.applyMarks(snap)) cx.notify();
+      return;
+    }
     this.gitLoading = true; this.gitAt = Date.now();
     cx.spawn(async cx => {
+      let changed = false;
       try {
-        const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd, on }).catch(() => null);
-        const marks = {};
-        if (top?.code === 0) {
-          const status = await exec("git", ["--no-optional-locks", "-c", "core.fsmonitor=false", "status", "--porcelain=v1", "-z", "--no-renames", "--untracked-files=all"], { cwd, on }).catch(() => null);
-          if (status?.code === 0) for (const entry of status.stdout.split("\0").filter(Boolean).slice(0, TOTAL)) {
-            const xy = entry.slice(0, 2);
-            marks[`${top.stdout.trim()}/${entry.slice(3)}`] = xy === "??" || xy.includes("A") ? "A" : xy.includes("U") ? "U" : xy.includes("D") ? "D" : "M";
-          }
-        }
-        if (this.current(context)) {
-          this.marks = marks;
-        }
-      } finally { if (this.context === context) this.gitLoading = false; cx.notify(); }
+        const snap = await git.status(cwd, on);
+        if (!this.current(context)) return;
+        this.gitRoot = snap.root;
+        changed = this.applyMarks(snap);
+      } catch {
+        // git 저장소가 아니거나 status 실패: 기존처럼 표시 없음
+        if (this.current(context) && (this.gitSig !== "" || Object.keys(this.marks).length)) { this.marks = {}; this.gitSig = ""; this.version++; changed = true; }
+      } finally { if (this.context === context) this.gitLoading = false; if (changed) cx.notify(); }
     });
+  }
+
+  applyMarks(snap) {
+    if (snap.sig === this.gitSig) return false;
+    const marks = {};
+    for (const [xy, path] of snap.entries) marks[`${snap.root}/${path}`] = markOf(xy);
+    this.marks = marks; this.gitSig = snap.sig; this.version++;
+    return true;
   }
 
   toggle(path, cx) {
     if (this.folders.has(path)) {
       for (const folder of [...this.folders]) if (folder === path || folder.startsWith(path + "/")) {
         this.folders.delete(folder);
-        this.entries.delete(folder);
+        this.deleteEntries(folder);
       }
+      this.version++;
     } else {
       this.folders.add(path);
+      this.version++;
       if (!this.entries.has(path) && !this.pending.has(path)) {
         const context = this.context;
         this.pending.add(path);
@@ -206,6 +259,7 @@ export default class Files extends View {
   // How many changed files sit under each folder, so a collapsed folder still
   // signals "something changed inside" without expanding it.
   dirtyCounts() {
+    if (this.countsFor?.marks === this.marks && this.countsFor.root === this.root) return this.countsFor.counts;
     const counts = new Map();
     for (const full in this.marks) {
       if (!this.root || !full.startsWith(this.root + "/")) continue;
@@ -216,7 +270,16 @@ export default class Files extends View {
         counts.set(folder, (counts.get(folder) ?? 0) + 1);
       }
     }
+    this.countsFor = { marks: this.marks, root: this.root, counts };
     return counts;
+  }
+
+  // marks·entries·folders가 바뀔 때만(version) 행 목록을 다시 만듭니다.
+  allRows() {
+    if (this.rowsFor?.version === this.version && this.rowsFor.root === this.root) return this.rowsFor.rows;
+    const rows = this.rows("", 0, [], this.dirtyCounts());
+    this.rowsFor = { version: this.version, root: this.root, rows };
+    return rows;
   }
 
   rows(prefix, depth, out, dirty) {
@@ -253,7 +316,13 @@ export default class Files extends View {
 
   render(cx) {
     if (key() !== this.context?.key) this.refresh(cx);
-    const t = theme(), rows = this.rows("", 0, [], this.dirtyCounts());
+    else {
+      // 숨겼다가 다시 보이면 바로 갱신
+      const active = this.active();
+      if (active && this.wasActive === false) { this.gitAt = 0; this.queueRefresh(null, cx); }
+      this.wasActive = active;
+    }
+    const t = theme(), rows = this.allRows();
     return v_flex().id("files").size_full().min_h(0).rounded(10).overflow_hidden().bg(t.background).border_1().border_color(t.border).text_color(t.foreground).text_size(13)
       .child(h_flex().h(42).flex_none().px(14).gap(8).items_center().border_b(1).border_color(t.border)
         .child(div().font_semibold().child("Files"))

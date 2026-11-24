@@ -35,9 +35,23 @@
 !mods/board-worktree/**
 !mods/board-todo/
 !mods/board-todo/**
+!mods/board-common/
+!mods/board-common/**
+
+# board-common → 각 모드 _common/ 복사 스크립트
+!scripts/
+!scripts/**
+
+# 표준 라이브러리 테스트(node --test, python3 -m unittest)
+!tests/
+!tests/**
 
 # Written by Herdr into each mod folder for editor tooling; not hand-authored.
 mods/board*/jsconfig.json
 mods/board*/gpui-kit.d.ts
 
 !README.md
+
+# Python 바이트코드(테스트·실행 시 생성)
+__pycache__/
+*.pyc

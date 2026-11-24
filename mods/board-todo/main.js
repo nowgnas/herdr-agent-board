@@ -35,12 +35,10 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, exec, readTextFile, writeTextFile, notify, home, run, checking, theme, layout, shared, setShared, pickFolder } from "herdr";
 import { STAGES, pickRandomPet, petById, stageForTotal, buildSprite } from "./pets.js";
+import { panelState } from "./_common/panel.js";
 
-function node(root, id) {
-  if (root?.id === id) return root;
-  for (const child of root?.children ?? []) { const found = node(child, id); if (found) return found; }
-  return null;
-}
+// 기존 접힘 판정 그대로: (size.px ?? 170) < 70
+const PANEL = { defaultPx: 170, collapsedBelow: 70 };
 // A folder picked in-app (see chooseFolder) overrides the layout's own
 // props.folder, so the save location can be changed without editing JSON.
 function folderFor() {
@@ -98,8 +96,10 @@ export default class Todo extends View {
     this.saveQueue = Promise.resolve();
     this.petQueue = Promise.resolve();
     this.refresh(cx);
-    cx.timer.every(15000, cx => this.refresh(cx));
+    cx.timer.every(15000, cx => { if (this.active()) this.refresh(cx); });
   }
+
+  active() { return panelState(layout(), "board-todo", PANEL).active; }
 
   refresh(cx) {
     const folder = folderFor();
@@ -112,6 +112,7 @@ export default class Todo extends View {
     this.loading = true;
     const key = `${folder}|${today}`;
     cx.spawn(async cx => {
+      let unchanged = false;
       try {
         const path = dayPath(folder, today);
         let text = await readTextFile(path);
@@ -122,6 +123,11 @@ export default class Todo extends View {
         }
         const petPath = `${folder}/.pet.json`;
         let petText = await readTextFile(petPath);
+        // 파일 텍스트와 pet이 그대로면 다시 파싱하거나 다시 그리지 않습니다.
+        if (`${this.folder}|${this.today}` === key && this.list?.text === text && this.petRaw !== null && this.petRaw === petText && !this.error) {
+          unchanged = true;
+          return;
+        }
         let pet;
         if (petText === null) {
           await exec("mkdir", ["-p", folder]);
@@ -142,7 +148,7 @@ export default class Todo extends View {
         }
       } catch (e) {
         if (`${this.folder}|${this.today}` === key) { this.error = String(e); this.list = null; }
-      } finally { this.loading = false; cx.notify(); }
+      } finally { this.loading = false; if (!unchanged) cx.notify(); }
     });
   }
 
@@ -247,8 +253,11 @@ export default class Todo extends View {
 
   render(cx) {
     const folder = folderFor(), today = dateKey();
+    const state = panelState(layout(), "board-todo", PANEL);
     if (folder !== this.folder || today !== this.today) this.refresh(cx);
-    const t = theme(), collapsed = (node(layout(), "board-todo")?.size?.px ?? 170) < 70;
+    else if (state.active && this.wasActive === false) this.refresh(cx); // 다시 펼치면 바로 갱신
+    this.wasActive = state.active;
+    const t = theme(), collapsed = state.collapsed;
     return v_flex().size_full().min_h(0).bg(t.canvas).border_t(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("todo-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
         .tooltip(collapsed ? "Todo 펼치기" : "Todo 접기")
