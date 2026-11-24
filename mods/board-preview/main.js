@@ -1,81 +1,49 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
-import { shared, setShared, readTextFile, exec, run, theme, settings, checking } from "herdr";
+import { shared, setShared, readTextFile, exec, run, theme, settings, checking, window } from "herdr";
+import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine } from "./diff.js";
+import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "../board-common/limits.js";
+import { wheelScroll, scrollThumb } from "../board-common/virtual.js";
 
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
+// 가상 스크롤 diff의 고정 행 높이와 12px 고정폭 글꼴의 대략적인 글자 폭(가로 스크롤 범위 추정)
+const ROW_H = 17, CHAR_W = 7.3, GUTTER_W = 100;
+const SH_NAME = "board-preview";
 
-// The real syntax grammar (Editor/EditorState) only covers whole-file mode.
-// A unified diff is rendered line-by-line with our own +/- backgrounds, so it
-// needs its own lightweight, per-line highlighter — not a full grammar, just
-// enough to color strings/comments/numbers/keywords so a diff doesn't read as
-// a flat wall of text.
-const HASH_COMMENT = new Set(["py", "rb", "sh", "bash", "zsh", "fish", "yml", "yaml", "toml", "pl", "r", "ex", "exs", "nim", "dockerfile", "makefile", "conf", "ini"]);
-const SQL_COMMENT = new Set(["sql"]);
-const HTML_COMMENT = new Set(["html", "htm", "xml", "svelte", "vue"]);
-const NO_COMMENT = new Set(["json", "md", "txt", "csv"]);
-function commentPattern(ext) {
-  if (HTML_COMMENT.has(ext)) return "<!--.*?-->";
-  if (HASH_COMMENT.has(ext)) return "#.*$";
-  if (SQL_COMMENT.has(ext)) return "--.*$";
-  if (NO_COMMENT.has(ext)) return null;
-  return "//.*$";
-}
-const KEYWORDS = ["if", "else", "elif", "for", "foreach", "while", "do", "return", "function", "func", "fn", "def", "class", "struct",
-  "interface", "implements", "extends", "import", "from", "export", "default", "const", "let", "var", "new", "this", "self", "try",
-  "except", "catch", "finally", "throw", "raise", "switch", "case", "break", "continue", "async", "await", "public", "private",
-  "protected", "static", "void", "null", "none", "nil", "undefined", "true", "false", "typeof", "instanceof", "in", "of", "as",
-  "with", "lambda", "yield", "match", "pass", "global", "nonlocal", "package", "namespace", "using", "include", "require", "super",
-  "is", "not", "and", "or"];
-const KEYWORD_SRC = `\\b(?:${KEYWORDS.join("|")})\\b`;
-const regexCache = new Map();
-function tokenRegex(ext) {
-  if (regexCache.has(ext)) return regexCache.get(ext);
-  const comment = commentPattern(ext);
-  const alts = [];
-  if (comment) alts.push(`(?<comment>${comment})`);
-  alts.push('(?<string>"(?:[^"\\\\]|\\\\.)*"|\'(?:[^\'\\\\]|\\\\.)*\'|`(?:[^`\\\\]|\\\\.)*`)');
-  alts.push("(?<number>\\b\\d+(?:\\.\\d+)?\\b)");
-  alts.push(`(?<keyword>${KEYWORD_SRC})`);
-  alts.push("(?<func>\\b[a-zA-Z_$][\\w$]*(?=\\())");
-  alts.push("(?<type>\\b[A-Z][A-Za-z0-9_]*\\b)");
-  const re = new RegExp(alts.join("|"), "g");
-  regexCache.set(ext, re);
-  return re;
-}
-function highlightLine(line, ext, t) {
-  const re = tokenRegex(ext);
-  re.lastIndex = 0;
-  const segments = [];
-  let last = 0, m;
-  while ((m = re.exec(line))) {
-    if (m.index > last) segments.push({ text: line.slice(last, m.index), color: null });
-    const kind = Object.keys(m.groups).find(k => m.groups[k] !== undefined);
-    const color = kind === "comment" ? t.dim : kind === "string" ? t.ansi2 : kind === "number" ? t.ansi1
-      : kind === "keyword" ? t.ansi5 : kind === "func" ? t.ansi4 : kind === "type" ? t.ansi3 : null;
-    segments.push({ text: m[0], color });
-    last = m.index + m[0].length;
-    if (m[0].length === 0) re.lastIndex++;
-  }
-  if (last < line.length) segments.push({ text: line.slice(last), color: null });
-  return segments;
+// 원격(on)이거나 Windows가 아니면 sh가 있다고 보고, 읽는 단계에서 head -c로 용량을 제한합니다.
+const useShell = on => Boolean(on) || window()?.platform !== "windows";
+// head -c로 자른 출력: 바이트 상한을 넘었으면 잘린 마지막 반쪽 줄을 버리고 truncated 표시.
+function capped(out) {
+  if (utf8Length(out) <= DIFF_MAX_CHARS) return { text: out, truncated: false };
+  return { text: truncateText(out, Math.min(out.length - 1, DIFF_MAX_CHARS)).text, truncated: true };
 }
 
-// Strips the file-header noise (we already show the path in our own header
-// bar) and tracks old/new line numbers through each hunk.
-function parseDiffLines(diffText) {
-  const lines = diffText.replace(/\n$/, "").split("\n");
-  const out = [];
-  let oldLine = 0, newLine = 0;
-  for (const raw of lines) {
-    if (raw.startsWith("diff --git") || raw.startsWith("index ") || raw.startsWith("--- ") || raw.startsWith("+++ ")) continue;
-    const hunk = /^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/.exec(raw);
-    if (hunk) { oldLine = Number(hunk[1]); newLine = Number(hunk[2]); out.push({ type: "hunk", text: raw }); continue; }
-    if (raw.startsWith("\\ No newline")) { out.push({ type: "meta", text: raw }); continue; }
-    if (raw.startsWith("+")) { out.push({ type: "add", text: raw.slice(1), newLine: newLine++ }); continue; }
-    if (raw.startsWith("-")) { out.push({ type: "remove", text: raw.slice(1), oldLine: oldLine++ }); continue; }
-    out.push({ type: "context", text: raw.slice(1), oldLine: oldLine++, newLine: newLine++ });
+async function readDiff(selection) {
+  const args = ["-c", "core.quotepath=false", "diff", "HEAD", "--", selection.path];
+  const opts = { cwd: selection.root, on: selection.on };
+  if (useShell(selection.on)) {
+    try {
+      const r = await exec("sh", ["-c", 'limit=$1; shift; git "$@" 2>/dev/null | head -c "$limit"', SH_NAME, String(DIFF_MAX_CHARS + 1), ...args], opts);
+      if (r.code === 0) return r.stdout.trim() ? capped(r.stdout) : null;
+    } catch {}
   }
-  return out;
+  const result = await exec("git", args, opts).catch(() => null);
+  return result?.code === 0 && result.stdout.trim() ? truncateText(result.stdout, DIFF_MAX_CHARS) : null;
+}
+
+// 상한보다 큰 파일만 head -c로 앞부분을 읽고, 그 밖에는 기존처럼 readTextFile.
+async function readFileLimited(path, on) {
+  if (useShell(on)) {
+    try {
+      const size = await exec("sh", ["-c", '[ -f "$1" ] && wc -c < "$1"', SH_NAME, path], { on });
+      if (size.code === 0 && Number(size.stdout.trim()) > DIFF_MAX_CHARS) {
+        const head = await exec("sh", ["-c", 'head -c "$2" "$1"', SH_NAME, path, String(DIFF_MAX_CHARS + 1)], { on });
+        if (head.code === 0) return { text: capped(head.stdout).text, truncated: true };
+      }
+    } catch {}
+  }
+  const text = await readTextFile(path, { on });
+  return text === null ? null : truncateText(text, DIFF_MAX_CHARS);
 }
 
 export default class Preview extends View {
@@ -89,30 +57,39 @@ export default class Preview extends View {
     this.code = null;
     this.diffLines = null;
     this.diffExt = null;
+    this.diffTruncated = false;
+    this.lineLimit = DIFF_MAX_LINES;
+    this.scroll = 0; this.scrollX = 0; this.maxChars = 0;
     this.error = null;
     this.isDiff = false;
     if (!selection?.root || !selection?.path || checking()) return;
     const wantDiff = Boolean(selection.diffable) && !this.preferFull;
     cx.spawn(async cx => {
       try {
-        let text = null, isDiff = false;
+        // 읽는 단계에서 DIFF_MAX_CHARS로 제한(큰 출력을 통째로 받아 두지 않음)
+        let read = null, isDiff = false;
         if (wantDiff) {
-          const result = await exec("git", ["-c", "core.quotepath=false", "diff", "HEAD", "--", selection.path], { cwd: selection.root, on: selection.on }).catch(() => null);
-          if (result?.code === 0 && result.stdout.trim()) { text = result.stdout; isDiff = true; }
+          read = await readDiff(selection).catch(() => null);
+          isDiff = Boolean(read);
         }
-        if (!isDiff) text = await readTextFile(`${selection.root}/${selection.path}`, { on: selection.on });
+        if (!isDiff) read = await readFileLimited(`${selection.root}/${selection.path}`, selection.on);
         if (this.key !== key || JSON.stringify(shared("board.preview")) !== key) return;
-        if (text === null) { this.error = wantDiff ? "삭제되었거나 더 이상 존재하지 않는 파일입니다" : "This file is no longer available"; return; }
+        if (read === null) { this.error = wantDiff ? "삭제되었거나 더 이상 존재하지 않는 파일입니다" : "This file is no longer available"; return; }
+        const { text, truncated } = read;
         if (!isDiff && text.includes("\0")) { this.error = "Binary file · no text preview"; return; }
         const ext = selection.path.includes(".") ? selection.path.split(".").pop().toLowerCase() : "txt";
         this.isDiff = isDiff;
         if (isDiff) {
           this.diffExt = ext;
-          this.diffLines = parseDiffLines(text.length > 400000 ? text.slice(0, 400000) : text);
+          this.diffTruncated = truncated;
+          this.diffLines = parseDiffLines(text);
+          // 하이라이트는 여기서 한 번만(행 상한까지). 그 뒤 줄은 처음 보일 때 한 번 계산해 캐시.
+          highlightRange(this.diffLines, ext, 0, this.lineLimit);
+          this.maxChars = longestLine(this.diffLines, this.lineLimit);
         } else {
           const t = theme();
           this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true,
-            value: text.length > 400000 ? text.slice(0, 400000) + "\n… (file truncated)" : text,
+            value: truncated ? text + "\n… (file truncated)" : text,
             font_family: settings().font_family, font_size: 12,
             syntax: { keyword: t.ansi5, string: t.ansi2, comment: t.dim, function: t.ansi4, type: t.ansi3, number: t.ansi1, constant: t.ansi6 } });
         }
@@ -127,26 +104,72 @@ export default class Preview extends View {
     this.load(selection, cx);
   }
 
-  diffRow(line, t) {
+  segColor(kind, t) {
+    return kind === "comment" ? t.dim : kind === "string" ? t.ansi2 : kind === "number" ? t.ansi1
+      : kind === "keyword" ? t.ansi5 : kind === "func" ? t.ansi4 : kind === "type" ? t.ansi3 : null;
+  }
+
+  diffRow(line, t, fixed = false) {
     const font = settings().font_family;
-    if (line.type === "hunk") return div().flex_none().px(8).py(2).bg(t.raised).text_color(t.dim).text_size(10).font_family(font).whitespace_nowrap().child(line.text);
-    if (line.type === "meta") return div().flex_none().px(8).text_color(t.dim).text_size(9).font_family(font).whitespace_nowrap().child(line.text);
+    if (line.type === "hunk") return div().flex_none().px(8).py(2).bg(t.raised).text_color(t.dim).text_size(10).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H).py(0)).child(line.text);
+    if (line.type === "meta") return div().flex_none().px(8).text_color(t.dim).text_size(9).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H)).child(line.text);
     const bg = line.type === "add" ? `${t.ansi2}22` : line.type === "remove" ? `${t.ansi1}22` : null;
     const marker = line.type === "add" ? "+" : line.type === "remove" ? "-" : " ";
     const markerColor = line.type === "add" ? t.ansi2 : line.type === "remove" ? t.ansi1 : t.dim;
-    const segs = highlightLine(line.text, this.diffExt, t);
-    let row = h_flex().flex_none().h(17).gap(6).items_center().pl(4).whitespace_nowrap().text_size(12).font_family(font);
+    const segs = segmentsOf(line, this.diffExt);
+    let row = h_flex().flex_none().h(ROW_H).gap(6).items_center().pl(4).whitespace_nowrap().text_size(12).font_family(font);
     if (bg) row = row.bg(bg);
     return row
       .child(div().flex_none().w(32).text_right().text_size(9).text_color(t.dim).child(line.oldLine ? String(line.oldLine) : ""))
       .child(div().flex_none().w(32).text_right().text_size(9).text_color(t.dim).child(line.newLine ? String(line.newLine) : ""))
       .child(div().flex_none().w(8).text_color(markerColor).child(marker))
-      .child(h_flex().flex_none().gap(0).children(segs.map(s => div().child(s.text || " ").when(Boolean(s.color), el => el.text_color(s.color)))));
+      .child(h_flex().flex_none().gap(0).children(segs.map(s => { const color = this.segColor(s.kind, t); return div().child(s.text || " ").when(Boolean(color), el => el.text_color(color)); })));
+  }
+
+  // 행 상한 초과("+N줄 더")·용량 절단 표시. 작은 diff에서는 아무것도 더하지 않습니다.
+  diffFooter(t, hidden) {
+    if (!hidden && !this.diffTruncated) return null;
+    return h_flex().flex_none().px(10).py(5).gap(8).items_center().border_t(1).border_color(t.border).text_size(11).text_color(t.dim)
+      .when(hidden > 0, el => el.child(div().id("board-preview-more").px(6).py(2).rounded(4).cursor_pointer().text_color(t.muted).hover(s => s.bg(t.hover))
+        .on_click((_e, cx) => { this.lineLimit += DIFF_MAX_LINES; this.maxChars = longestLine(this.diffLines, this.lineLimit); cx.notify(); })
+        .child(`+${hidden.toLocaleString()}줄 더`)))
+      .when(this.diffTruncated, el => el.child(div().flex_1().min_w(0).truncate()
+        .child(`diff가 ${DIFF_MAX_CHARS.toLocaleString()}자에서 잘렸습니다`)));
   }
 
   renderDiff(t) {
-    return v_flex().flex_1().min_h(0).overflow_y_scrollbar().overflow_x_scrollbar().py(4)
-      .children(this.diffLines.map(line => this.diffRow(line, t)));
+    const count = Math.min(this.diffLines.length, this.lineLimit), hidden = this.diffLines.length - count;
+    const footer = this.diffFooter(t, hidden);
+    if (count <= VIRTUAL_MIN_ROWS) {
+      const list = v_flex().flex_1().min_h(0).overflow_y_scrollbar().overflow_x_scrollbar().py(4)
+        .children(this.diffLines.slice(0, count).map(line => this.diffRow(line, t)));
+      return footer ? v_flex().flex_1().min_h(0).child(list).child(footer) : list;
+    }
+    // 가상 스크롤: 화면에 보이는 행(+overscan)만 만들고 나머지는 위치만 계산합니다.
+    const viewport = this.viewH ?? 600, width = this.viewW ?? 800;
+    const view = diffView(this.diffLines, { limit: this.lineLimit, rowHeight: ROW_H, viewport, scroll: this.scroll, ext: this.diffExt });
+    this.scroll = view.window.scroll;
+    const maxX = Math.max(0, GUTTER_W + this.maxChars * CHAR_W - width);
+    this.scrollX = Math.max(0, Math.min(this.scrollX, maxX));
+    const thumb = scrollThumb({ scroll: view.window.scroll, viewport, total: view.window.total });
+    const maxScroll = view.window.maxScroll;
+    const list = div().id("board-preview-diff").flex_1().min_h(0).relative().overflow_hidden()
+      .on_size_change((size, cx) => {
+        const zoom = settings().zoom || 1, h = size.height / zoom, w = size.width / zoom;
+        if (h !== this.viewH || w !== this.viewW) { this.viewH = h; this.viewW = w; cx.notify(); }
+      })
+      .on_scroll_wheel((e, cx) => {
+        const dy = e.delta?.y ?? 0, dx = e.delta?.x ?? 0;
+        if (e.modifiers?.shift && !dx) this.scrollX = Math.max(0, Math.min(this.scrollX - dy, maxX));
+        else {
+          this.scroll = wheelScroll(this.scroll, dy, maxScroll);
+          if (dx) this.scrollX = Math.max(0, Math.min(this.scrollX - dx, maxX));
+        }
+        cx.notify();
+      })
+      .children(view.rows.map(r => this.diffRow(r.item, t, true).absolute().top(r.top).left(-this.scrollX).min_w(width + this.scrollX)))
+      .when(Boolean(thumb), el => el.child(div().absolute().right(1).w(5).rounded(3).bg(t.border).top(thumb.top).h(thumb.height)));
+    return v_flex().flex_1().min_h(0).child(list).when(Boolean(footer), el => el.child(footer));
   }
 
   render(cx) {
