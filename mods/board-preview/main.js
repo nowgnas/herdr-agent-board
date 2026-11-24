@@ -1,13 +1,14 @@
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
 import { shared, setShared, readTextFile, exec, run, theme, settings, checking, window } from "herdr";
-import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine } from "./diff.js";
+import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine, maxScrollX } from "./diff.js";
 import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
 import { wheelScroll, scrollThumb } from "./_common/virtual.js";
 
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
 // 가상 스크롤 diff의 고정 행 높이와 12px 고정폭 글꼴의 대략적인 글자 폭(가로 스크롤 범위 추정)
-const ROW_H = 17, CHAR_W = 7.3, GUTTER_W = 100;
+// FONT_SIZE: diff 행 글자 크기(가로 스크롤 폭 계산에도 같은 값을 씁니다)
+const ROW_H = 17, FONT_SIZE = 12, GUTTER_W = 100;
 const SH_NAME = "board-preview";
 
 // 원격(on)이거나 Windows가 아니면 sh가 있다고 보고, 읽는 단계에서 head -c로 용량을 제한합니다.
@@ -59,7 +60,7 @@ export default class Preview extends View {
     this.diffExt = null;
     this.diffTruncated = false;
     this.lineLimit = DIFF_MAX_LINES;
-    this.scroll = 0; this.scrollX = 0; this.maxChars = 0;
+    this.scroll = 0; this.scrollX = 0; this.maxCells = 0;
     this.error = null;
     this.isDiff = false;
     if (!selection?.root || !selection?.path || checking()) return;
@@ -85,7 +86,7 @@ export default class Preview extends View {
           this.diffLines = parseDiffLines(text);
           // 하이라이트는 여기서 한 번만(행 상한까지). 그 뒤 줄은 처음 보일 때 한 번 계산해 캐시.
           highlightRange(this.diffLines, ext, 0, this.lineLimit);
-          this.maxChars = longestLine(this.diffLines, this.lineLimit);
+          this.maxCells = longestLine(this.diffLines, this.lineLimit);
         } else {
           const t = theme();
           this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true,
@@ -117,7 +118,7 @@ export default class Preview extends View {
     const marker = line.type === "add" ? "+" : line.type === "remove" ? "-" : " ";
     const markerColor = line.type === "add" ? t.ansi2 : line.type === "remove" ? t.ansi1 : t.dim;
     const segs = segmentsOf(line, this.diffExt);
-    let row = h_flex().flex_none().h(ROW_H).gap(6).items_center().pl(4).whitespace_nowrap().text_size(12).font_family(font);
+    let row = h_flex().flex_none().h(ROW_H).gap(6).items_center().pl(4).whitespace_nowrap().text_size(FONT_SIZE).font_family(font);
     if (bg) row = row.bg(bg);
     return row
       .child(div().flex_none().w(32).text_right().text_size(9).text_color(t.dim).child(line.oldLine ? String(line.oldLine) : ""))
@@ -131,7 +132,7 @@ export default class Preview extends View {
     if (!hidden && !this.diffTruncated) return null;
     return h_flex().flex_none().px(10).py(5).gap(8).items_center().border_t(1).border_color(t.border).text_size(11).text_color(t.dim)
       .when(hidden > 0, el => el.child(div().id("board-preview-more").px(6).py(2).rounded(4).cursor_pointer().text_color(t.muted).hover(s => s.bg(t.hover))
-        .on_click((_e, cx) => { this.lineLimit += DIFF_MAX_LINES; this.maxChars = longestLine(this.diffLines, this.lineLimit); cx.notify(); })
+        .on_click((_e, cx) => { this.lineLimit += DIFF_MAX_LINES; this.maxCells = longestLine(this.diffLines, this.lineLimit); cx.notify(); })
         .child(`+${hidden.toLocaleString()}줄 더`)))
       .when(this.diffTruncated, el => el.child(div().flex_1().min_w(0).truncate()
         .child(`diff가 ${DIFF_MAX_CHARS.toLocaleString()}자에서 잘렸습니다`)));
@@ -149,7 +150,7 @@ export default class Preview extends View {
     const viewport = this.viewH ?? 600, width = this.viewW ?? 800;
     const view = diffView(this.diffLines, { limit: this.lineLimit, rowHeight: ROW_H, viewport, scroll: this.scroll, ext: this.diffExt });
     this.scroll = view.window.scroll;
-    const maxX = Math.max(0, GUTTER_W + this.maxChars * CHAR_W - width);
+    const maxX = maxScrollX({ cells: this.maxCells, fontSize: FONT_SIZE, gutter: GUTTER_W, width });
     this.scrollX = Math.max(0, Math.min(this.scrollX, maxX));
     const thumb = scrollThumb({ scroll: view.window.scroll, viewport, total: view.window.total });
     const maxScroll = view.window.maxScroll;

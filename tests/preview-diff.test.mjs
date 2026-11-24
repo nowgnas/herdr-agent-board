@@ -1,7 +1,7 @@
 // board-preview diff 파싱·하이라이트·절단 순수 로직 테스트
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseDiffLines, highlightTokens, segmentsOf, truncateText, utf8Length, limitLines, diffView } from "../mods/board-preview/diff.js";
+import { parseDiffLines, highlightTokens, segmentsOf, truncateText, utf8Length, limitLines, diffView, longestLine, textCells, maxScrollX, CELL_EM } from "../mods/board-preview/diff.js";
 
 const SAMPLE = [
   "diff --git a/x.js b/x.js",
@@ -73,4 +73,34 @@ test("diffView: 큰 diff도 렌더 대상은 보이는 행뿐이고 하이라이
   assert.equal(view.rows[0].item, lines[995]);
   const highlighted = lines.filter(l => l.segs).length;
   assert.equal(highlighted, view.rows.length);
+});
+
+test("textCells: ASCII 1칸, 한글·한자·전각·이모지 2칸, 기타 비ASCII 1.5칸, 탭 4칸", () => {
+  assert.equal(textCells("abc"), 3);
+  assert.equal(textCells("한글"), 4);
+  assert.equal(textCells("漢字ｶﾅＡ"), 2 + 2 + 1.5 + 1.5 + 2); // 반각 가타카나는 전각 아님
+  assert.equal(textCells("é"), 1.5);
+  assert.equal(textCells("\t"), 4);
+  assert.equal(textCells("😀"), 2);
+});
+
+test("longestLine: 글자 수가 아니라 화면 칸 수로 가장 넓은 줄", () => {
+  const lines = [{ text: "a".repeat(300) }, { text: "가".repeat(200) }, { text: "\t".repeat(10) }];
+  assert.equal(longestLine(lines), 400);
+  assert.equal(longestLine(lines, 1), 300);
+});
+
+test("maxScrollX: 한글 200자 줄도 오른쪽 끝까지 스크롤 범위가 충분하다", () => {
+  const fontSize = 12, gutter = 100, width = 800;
+  const cells = longestLine([{ text: "가".repeat(200) }]);
+  const max = maxScrollX({ cells, fontSize, gutter, width });
+  // 한글 글리프는 보통 1em(=12px) 폭: 실제 내용 끝(100 + 200*12)이 보이는 위치까지 갈 수 있어야 함
+  assert.ok(max + width >= gutter + 200 * fontSize, `max=${max}`);
+  assert.ok(max > 200 * 7.3 + gutter - width, "예전 고정 7.3px 추정보다 넓다");
+  // 글꼴 크기가 커지면 범위도 커진다
+  assert.ok(maxScrollX({ cells, fontSize: 16, gutter, width }) > max);
+  // ASCII는 고정폭 0.6em보다 넉넉
+  assert.ok(maxScrollX({ cells: 300, fontSize, gutter, width }) + width >= gutter + 300 * fontSize * 0.6);
+  assert.ok(CELL_EM >= 0.6);
+  assert.equal(maxScrollX({ cells: 10, fontSize, gutter, width }), 0);
 });

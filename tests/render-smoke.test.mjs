@@ -147,6 +147,25 @@ test("preview: 3만 줄 diff도 보이는 행만 만들고 '+N줄 더'", async (
   assert.match(more.kids.join(""), /줄 더$/);
 });
 
+test("preview: 한글이 많은 긴 줄도 shift+휠로 오른쪽 끝까지 이동", async () => {
+  const long = "가나다라마바사아자차".repeat(30); // 300자
+  const body = Array.from({ length: 200 }, (_, i) => (i === 150 ? `+${long}` : `+const v${i} = ${i};`)).join("\n");
+  const diff = `diff --git a/k.md b/k.md\n--- a/k.md\n+++ b/k.md\n@@ -0,0 +1,200 @@\n${body}\n`;
+  globalThis.__herdr.exec = async (cmd) => (cmd === "sh" ? { code: 0, stdout: diff, stderr: "" } : { code: 1, stdout: "", stderr: "" });
+  globalThis.__herdr.shared.set("board.preview", { root: "/repo", path: "k.md", on: null, diffable: true });
+  const { default: Preview } = await import("../mods/board-preview/main.js");
+  const view = new Preview(), cx = makeCx();
+  view.render(cx); await cx.settle();
+  let box = byIdPrefix(view.render(cx), "board-preview-diff")[0];
+  assert.ok(box, "가상 스크롤 diff");
+  box.handlers.on_size_change({ width: 600, height: 400 }, cx);
+  box = byIdPrefix(view.render(cx), "board-preview-diff")[0];
+  box.handlers.on_scroll_wheel({ delta: { y: -1e9 }, modifiers: { shift: true } }, cx);
+  view.render(cx);
+  // 한글 300자(글리프 1em=12px)가 끝까지 보이려면 100 + 3600 - 600 이상 이동할 수 있어야 함
+  assert.ok(view.scrollX >= 100 + 300 * 12 - 600, `scrollX=${view.scrollX}`);
+});
+
 test("preview: 작은 diff는 기존처럼 전부 그린다", async () => {
   const diff = "diff --git a/x.js b/x.js\n--- a/x.js\n+++ b/x.js\n@@ -1 +1 @@\n-a\n+b\n";
   globalThis.__herdr.exec = async (cmd) => (cmd === "sh" ? { code: 0, stdout: diff, stderr: "" } : { code: 1, stdout: "" });

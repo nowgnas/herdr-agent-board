@@ -127,9 +127,41 @@ export function diffView(lines, { limit, rowHeight, viewport, scroll, overscan =
   return { rows, window, count, hidden: lines.length - count };
 }
 
-// 가장 긴 줄 길이(가로 스크롤 범위 추정용).
+// 가로 스크롤 범위 추정용 화면 칸 수. 고정 ASCII 폭만 가정하면 한글 등 전각 문자가 많은 줄의
+// 오른쪽 끝에 도달할 수 없으므로, 넉넉하게 잡습니다(남는 여백은 괜찮고 잘리는 것은 안 됨).
+// ASCII 1칸, 한글·한자·가나·전각·이모지 2칸, 그 밖의 비ASCII 1.5칸(대체 글꼴), 탭 4칸.
+const WIDE = [[0x1100, 0x115f], [0x231a, 0x231b], [0x2329, 0x232a], [0x2e80, 0x303e], [0x3041, 0x33ff],
+  [0x3400, 0x4dbf], [0x4e00, 0x9fff], [0xa000, 0xa4cf], [0xa960, 0xa97f], [0xac00, 0xd7a3], [0xd7b0, 0xd7ff],
+  [0xf900, 0xfaff], [0xfe10, 0xfe19], [0xfe30, 0xfe6f], [0xff00, 0xff60], [0xffe0, 0xffe6],
+  [0x1f300, 0x1f64f], [0x1f900, 0x1f9ff], [0x20000, 0x3fffd]];
+function isWide(cp) {
+  for (const [a, b] of WIDE) { if (cp < a) return false; if (cp <= b) return true; }
+  return false;
+}
+export function textCells(text) {
+  let cells = 0;
+  for (const ch of text) {
+    const cp = ch.codePointAt(0);
+    cells += cp === 9 ? 4 : cp < 0x80 ? 1 : isWide(cp) ? 2 : 1.5;
+  }
+  return cells;
+}
+
+// 가장 넓은 줄의 화면 칸 수(limit 줄까지).
 export function longestLine(lines, limit = lines.length) {
   let n = 0;
-  for (let i = 0; i < Math.min(limit, lines.length); i++) if (lines[i].text.length > n) n = lines[i].text.length;
+  for (let i = 0; i < Math.min(limit, lines.length); i++) {
+    const text = lines[i].text;
+    if (text.length * 4 <= n) continue; // 모두 탭(4칸)이어도 더 넓을 수 없는 줄은 건너뜀
+    const cells = textCells(text);
+    if (cells > n) n = cells;
+  }
   return n;
+}
+
+// ASCII 한 칸 폭(em). 고정폭 글꼴은 보통 0.6em 안팎이라 조금 넉넉하게 잡습니다.
+export const CELL_EM = 0.65;
+// 가로 스크롤 최대값(px): 줄번호 칸 + 내용 폭(글꼴 크기 반영) + 끝 여백 2칸 - 보이는 폭.
+export function maxScrollX({ cells, fontSize, gutter, width }) {
+  return Math.max(0, Math.ceil(gutter + (cells + 2) * fontSize * CELL_EM - width));
 }
