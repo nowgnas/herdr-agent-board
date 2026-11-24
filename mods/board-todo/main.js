@@ -99,6 +99,12 @@ export default class Todo extends View {
     // past the version it expected.
     this.saveQueue = Promise.resolve();
     this.petQueue = Promise.resolve();
+    // While a save/grow write is queued but not yet on disk, the periodic
+    // poll below must not re-read the file: it would still see the old
+    // (pre-toggle) content, revert the optimistic UI state back, and then a
+    // follow-up click would save against that stale text and get rejected
+    // ("stale snapshot") — the write that looked like it silently failed.
+    this.pendingWrites = 0;
     this.refresh(cx);
     cx.timer.every(15000, cx => { if (this.active()) this.refresh(cx); });
   }
@@ -112,7 +118,7 @@ export default class Todo extends View {
       this.folder = folder; this.today = today;
       this.list = null; this.error = null; this.input = null;
     }
-    if (!folder || this.loading || checking()) return;
+    if (!folder || this.loading || this.pendingWrites > 0 || checking()) return;
     this.loading = true;
     const key = `${folder}|${today}`;
     cx.spawn(async cx => {
@@ -165,12 +171,17 @@ export default class Todo extends View {
     const expected = this.list.text;
     this.list = { ...parseList(text), text };
     cx.notify();
+    this.pendingWrites++;
     this.saveQueue = this.saveQueue
       .then(() => writeTextFile(path, text, expected))
-      .catch(() => {
-        notify({ title: tr("todo 파일 저장 실패", "Failed to save todo file"), body: today, level: "error" });
-        this.refresh(cx);
-      });
+      .then(
+        () => { this.pendingWrites--; },
+        () => {
+          this.pendingWrites--;
+          notify({ title: tr("todo 파일 저장 실패", "Failed to save todo file"), body: today, level: "error" });
+          this.refresh(cx);
+        },
+      );
   }
 
   toggle(lineIndex, cx) {
@@ -199,19 +210,23 @@ export default class Todo extends View {
     const expected = this.petRaw;
     this.pet = pet; this.petRaw = raw;
     cx.notify();
+    this.pendingWrites++;
     this.petQueue = this.petQueue
       .then(() => writeTextFile(this.petPath, raw, expected))
-      .then(() => {
-        const after = stageForTotal(pet.total);
-        if (after > before) {
-          const species = petById(pet.species), name = petName(species), stage = stageName(STAGES[after]);
-          notify({
-            title: tr(`${name}가 "${stage}" 단계로 진화했어요!`, `${name} evolved into "${stage}"!`),
-            body: tr("todo를 계속 완료해서 더 키워보세요", "Keep completing todos to grow it further"), level: "info",
-          });
-        }
-      })
-      .catch(() => this.refresh(cx));
+      .then(
+        () => {
+          this.pendingWrites--;
+          const after = stageForTotal(pet.total);
+          if (after > before) {
+            const species = petById(pet.species), name = petName(species), stage = stageName(STAGES[after]);
+            notify({
+              title: tr(`${name}가 "${stage}" 단계로 진화했어요!`, `${name} evolved into "${stage}"!`),
+              body: tr("todo를 계속 완료해서 더 키워보세요", "Keep completing todos to grow it further"), level: "info",
+            });
+          }
+        },
+        () => { this.pendingWrites--; this.refresh(cx); },
+      );
   }
 
   chooseFolder(cx) {
