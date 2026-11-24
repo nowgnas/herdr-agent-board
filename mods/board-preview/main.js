@@ -110,15 +110,18 @@ export default class Preview extends View {
       : kind === "keyword" ? t.ansi5 : kind === "func" ? t.ansi4 : kind === "type" ? t.ansi3 : null;
   }
 
-  diffRow(line, t, fixed = false) {
+  // i: a stable key (the line's index in this.diffLines) so GPUI can track each
+  // absolutely-positioned virtual row across renders — without it, repositioning
+  // on scroll isn't reliably picked up (rows can appear to "stick" in place).
+  diffRow(line, t, fixed = false, i = 0) {
     const font = settings().font_family;
-    if (line.type === "hunk") return div().flex_none().px(8).py(2).bg(t.raised).text_color(t.dim).text_size(10).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H).py(0)).child(line.text);
-    if (line.type === "meta") return div().flex_none().px(8).text_color(t.dim).text_size(9).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H)).child(line.text);
+    if (line.type === "hunk") return div().id(`diff-row-${i}`).flex_none().px(8).py(2).bg(t.raised).text_color(t.dim).text_size(10).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H).py(0)).child(line.text);
+    if (line.type === "meta") return div().id(`diff-row-${i}`).flex_none().px(8).text_color(t.dim).text_size(9).font_family(font).whitespace_nowrap().when(fixed, el => el.h(ROW_H)).child(line.text);
     const bg = line.type === "add" ? `${t.ansi2}22` : line.type === "remove" ? `${t.ansi1}22` : null;
     const marker = line.type === "add" ? "+" : line.type === "remove" ? "-" : " ";
     const markerColor = line.type === "add" ? t.ansi2 : line.type === "remove" ? t.ansi1 : t.dim;
     const segs = segmentsOf(line, this.diffExt);
-    let row = h_flex().flex_none().h(ROW_H).gap(6).items_center().pl(4).whitespace_nowrap().text_size(FONT_SIZE).font_family(font);
+    let row = h_flex().id(`diff-row-${i}`).flex_none().h(ROW_H).gap(6).items_center().pl(4).whitespace_nowrap().text_size(FONT_SIZE).font_family(font);
     if (bg) row = row.bg(bg);
     return row
       .child(div().flex_none().w(32).text_right().text_size(9).text_color(t.dim).child(line.oldLine ? String(line.oldLine) : ""))
@@ -143,7 +146,7 @@ export default class Preview extends View {
     const footer = this.diffFooter(t, hidden);
     if (count <= VIRTUAL_MIN_ROWS) {
       const list = v_flex().flex_1().min_h(0).overflow_y_scrollbar().overflow_x_scrollbar().py(4)
-        .children(this.diffLines.slice(0, count).map(line => this.diffRow(line, t)));
+        .children(this.diffLines.slice(0, count).map((line, i) => this.diffRow(line, t, false, i)));
       return footer ? v_flex().flex_1().min_h(0).child(list).child(footer) : list;
     }
     // 가상 스크롤: 화면에 보이는 행(+overscan)만 만들고 나머지는 위치만 계산합니다.
@@ -168,7 +171,7 @@ export default class Preview extends View {
         }
         cx.notify();
       })
-      .children(view.rows.map(r => this.diffRow(r.item, t, true).absolute().top(r.top).left(-this.scrollX).min_w(width + this.scrollX)))
+      .children(view.rows.map(r => this.diffRow(r.item, t, true, r.index).absolute().top(r.top).left(-this.scrollX).min_w(width + this.scrollX)))
       .when(Boolean(thumb), el => el.child(div().absolute().right(1).w(5).rounded(3).bg(t.border).top(thumb.top).h(thumb.height)));
     return v_flex().flex_1().min_h(0).child(list).when(Boolean(footer), el => el.child(footer));
   }

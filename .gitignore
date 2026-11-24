@@ -35,6 +35,10 @@
 !mods/board-worktree/**
 !mods/board-todo/
 !mods/board-todo/**
+!mods/board-find-in-path/
+!mods/board-find-in-path/**
+!mods/board-goto-file/
+!mods/board-goto-file/**
 !mods/board-common/
 !mods/board-common/**
 
