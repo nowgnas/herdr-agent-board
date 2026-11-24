@@ -1,7 +1,7 @@
 // changes/files가 공유하는 git status 헬퍼 테스트(가짜 exec·shared 주입)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseStatus, markOf, statusSignature, createGitStatus, STATUS_ARGS } from "../mods/board-common/gitstatus.js";
+import { parseStatus, markOf, statusSignature, createGitStatus, STATUS_ARGS } from "../mods/board-changes/_common/gitstatus.js";
 
 const Z = entries => entries.map(([xy, p]) => `${xy} ${p}`).join("\0") + "\0";
 

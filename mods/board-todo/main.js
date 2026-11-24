@@ -35,7 +35,7 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input } from "gpui-base";
 import { props, exec, readTextFile, writeTextFile, notify, home, run, checking, theme, layout, shared, setShared, pickFolder } from "herdr";
 import { STAGES, pickRandomPet, petById, stageForTotal, buildSprite } from "./pets.js";
-import { panelState } from "../board-common/panel.js";
+import { panelState } from "./_common/panel.js";
 
 // 기존 접힘 판정 그대로: (size.px ?? 170) < 70
 const PANEL = { defaultPx: 170, collapsedBelow: 70 };

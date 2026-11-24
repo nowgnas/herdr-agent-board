@@ -1,9 +1,9 @@
 // 공통 모듈(상한 상수·가상 스크롤·패널 상태) 순수 로직 테스트
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import * as L from "../mods/board-common/limits.js";
-import { visibleWindow, wheelScroll, scrollThumb, nextLimit, virtualSlice } from "../mods/board-common/virtual.js";
-import { findNode, panelState } from "../mods/board-common/panel.js";
+import * as L from "../mods/board-changes/_common/limits.js";
+import { visibleWindow, wheelScroll, scrollThumb, nextLimit, virtualSlice } from "../mods/board-changes/_common/virtual.js";
+import { findNode, panelState } from "../mods/board-changes/_common/panel.js";
 
 test("상한 상수: changes 표시 상한과 files marks 상한이 같다", () => {
   assert.equal(L.STATUS_LIMIT, 5000);

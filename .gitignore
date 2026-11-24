@@ -38,6 +38,10 @@
 !mods/board-common/
 !mods/board-common/**
 
+# board-common → 각 모드 _common/ 복사 스크립트
+!scripts/
+!scripts/**
+
 # 표준 라이브러리 테스트(node --test, python3 -m unittest)
 !tests/
 !tests/**

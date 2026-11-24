@@ -2,9 +2,9 @@
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
 import { spaces, panes, focused, exec, watchFolder, theme, window, shared, setShared, run, notify, layout } from "herdr";
-import { createGitStatus, markOf } from "../board-common/gitstatus.js";
-import { panelState } from "../board-common/panel.js";
-import { FILES_PER_FOLDER, FILES_TOTAL, FILES_SAVED_LIMIT } from "../board-common/limits.js";
+import { createGitStatus, markOf } from "./_common/gitstatus.js";
+import { panelState } from "./_common/panel.js";
+import { FILES_PER_FOLDER, FILES_TOTAL, FILES_SAVED_LIMIT } from "./_common/limits.js";
 
 function location() {
   const space = spaces().find(s => s.active), f = focused();

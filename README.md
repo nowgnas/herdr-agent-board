@@ -80,7 +80,7 @@ changed, what it costs, and where to open it next.
 | `mods/board-picker` | `⌘P` mod/agent picker |
 | `mods/board-session` | new-session / worktree dialog |
 | `mods/board-worktree` | worktree base helper shared by the above |
-| `mods/board-common` | shared limits, virtual-scroll math, panel state and the shared `git status` helper (imported by the mods above; not a mod itself) |
+| `mods/board-common` | single source of the shared limits, virtual-scroll math, panel state and `git status` helper (not a mod itself). Herdr only lets a mod import files inside its own folder, so each mod gets a byte-for-byte copy in `mods/<mod>/_common/` — edit `board-common`, then run `node scripts/sync-common.mjs`; a test fails if a copy drifts |
 
 Only this layout and these mods are tracked here — Herdr's own shipped
 layouts and mods (`main`, `terminals`, `win98`, `spaces`, `agents`, ...)
@@ -140,7 +140,7 @@ section (not tracked here, since it's a single shared file):
   most 400,000 characters (cut while reading via `head -c`, not after) and
   shows up to 5,000 lines with `+N줄 더`. Long lists and diffs only build the
   rows on screen (virtual scroll with the mouse wheel; shift+wheel scrolls a
-  diff sideways). All limits live in `mods/board-common/limits.js`.
+  diff sideways). All limits live in `mods/board-common/limits.js` (copied into each mod's `_common/`).
 - **Shared `git status`** — the changed-files panel and the file tree share
   one `git rev-parse`/`git status --untracked-files=all` per repo (cached a
   few seconds), instead of each running its own.

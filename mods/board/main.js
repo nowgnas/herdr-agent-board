@@ -2,8 +2,8 @@ import { labelIndex } from "./labels.js";
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex, v_flex, Scrollbar, InputState, Input } from "gpui-base";
 import { agents, spaces, panes, props, run, openOverlay, focused, theme, pickFolder, notify, setAgentOrder, layout, nextCommand, checking, settings } from "herdr";
-import { BOARD_VIRTUAL_MIN_CARDS } from "../board-common/limits.js";
-import { virtualSlice, wheelScroll, scrollThumb } from "../board-common/virtual.js";
+import { BOARD_VIRTUAL_MIN_CARDS } from "./_common/limits.js";
+import { virtualSlice, wheelScroll, scrollThumb } from "./_common/virtual.js";
 
 function findNode(node, id) {
   if (node?.id === id) return node;

@@ -1,7 +1,7 @@
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, focused, props, run, exec, appHome, checking, theme, layout } from "herdr";
-import { panelState } from "../board-common/panel.js";
+import { panelState } from "./_common/panel.js";
 
 function current() {
   const space = spaces().find(s => s.active), focus = focused();

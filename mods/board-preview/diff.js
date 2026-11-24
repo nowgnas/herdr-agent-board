@@ -1,6 +1,6 @@
 // board-preview의 순수 로직: diff 파싱, 줄 단위 하이라이트(캐시), 읽기 상한 절단,
 // 행 상한과 보이는 행 계산. herdr/gpui에 의존하지 않아 node --test로 검사합니다.
-import { visibleWindow } from "../board-common/virtual.js";
+import { visibleWindow } from "./_common/virtual.js";
 
 // The real syntax grammar (Editor/EditorState) only covers whole-file mode.
 // A unified diff is rendered line-by-line with our own +/- backgrounds, so it

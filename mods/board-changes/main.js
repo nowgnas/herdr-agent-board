@@ -3,16 +3,16 @@
 // see its diff in board-preview (board-files does the same for a row it
 // already has marked; this panel exists for "show me everything changed").
 //
-// git rev-parse/status는 board-files와 공유합니다(board-common/gitstatus.js).
+// git rev-parse/status는 board-files와 공유합니다(_common/gitstatus.js, 원본 board-common).
 // 목록은 처음 LIST_INITIAL개, "+N개 더"로 STATUS_LIMIT개까지 늘어나고, 많으면
 // 화면에 보이는 행만 만드는 가상 스크롤로 그립니다. 접히거나 숨겨지면 폴링을 멈춥니다.
 import { View, div } from "gpui-kit";
 import { h_flex, v_flex } from "gpui-base";
 import { spaces, panes, focused, exec, run, shared, setShared, checking, theme, layout, settings } from "herdr";
-import { createGitStatus, markOf } from "../board-common/gitstatus.js";
-import { panelState } from "../board-common/panel.js";
-import { LIST_INITIAL, LIST_STEP, STATUS_LIMIT, VIRTUAL_MIN_ROWS } from "../board-common/limits.js";
-import { virtualSlice, wheelScroll, scrollThumb, nextLimit } from "../board-common/virtual.js";
+import { createGitStatus, markOf } from "./_common/gitstatus.js";
+import { panelState } from "./_common/panel.js";
+import { LIST_INITIAL, LIST_STEP, STATUS_LIMIT, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
+import { virtualSlice, wheelScroll, scrollThumb, nextLimit } from "./_common/virtual.js";
 
 function location() {
   const space = spaces().find(s => s.active), focus = focused();

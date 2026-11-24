@@ -1,5 +1,5 @@
 import { labelIndex } from "./labels.js";
-import { PICKER_SESSION_LIMIT } from "../board-common/limits.js";
+import { PICKER_SESSION_LIMIT } from "./_common/limits.js";
 // Go to a tab. Drops from the Terminals layout's space chip (popup, at: "top"). Spaces with
 // something that needs you come first, quiet spaces (no agent running)
 // fold into "earlier". Type to filter, ↑/↓ and Enter to go, ctrl+d to close

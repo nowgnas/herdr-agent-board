@@ -2,8 +2,8 @@ import { View, div } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
 import { shared, setShared, readTextFile, exec, run, theme, settings, checking, window } from "herdr";
 import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine } from "./diff.js";
-import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "../board-common/limits.js";
-import { wheelScroll, scrollThumb } from "../board-common/virtual.js";
+import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
+import { wheelScroll, scrollThumb } from "./_common/virtual.js";
 
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
 // 가상 스크롤 diff의 고정 행 높이와 12px 고정폭 글꼴의 대략적인 글자 폭(가로 스크롤 범위 추정)
