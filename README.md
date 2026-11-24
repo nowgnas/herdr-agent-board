@@ -80,6 +80,7 @@ changed, what it costs, and where to open it next.
 | `mods/board-picker` | `⌘P` mod/agent picker |
 | `mods/board-session` | new-session / worktree dialog |
 | `mods/board-worktree` | worktree base helper shared by the above |
+| `mods/board-common` | shared limits, virtual-scroll math, panel state and the shared `git status` helper (imported by the mods above; not a mod itself) |
 
 Only this layout and these mods are tracked here — Herdr's own shipped
 layouts and mods (`main`, `terminals`, `win98`, `spaces`, `agents`, ...)
@@ -130,3 +131,29 @@ section (not tracked here, since it's a single shared file):
   timeline panels shell out to `git`.
 - `herdr-app check mods/<name>` validates each mod after any edit — see
   Herdr's own `AGENTS.md` for the full authoring reference.
+
+## Limits, caches, polling
+
+- **Changed files / diff limits** — the changed-files list shows the first
+  200 entries, then `+N개 더` up to 5,000 (the same cap as the file tree's
+  marks); anything past that is counted but not listed. A diff is read at
+  most 400,000 characters (cut while reading via `head -c`, not after) and
+  shows up to 5,000 lines with `+N줄 더`. Long lists and diffs only build the
+  rows on screen (virtual scroll with the mouse wheel; shift+wheel scrolls a
+  diff sideways). All limits live in `mods/board-common/limits.js`.
+- **Shared `git status`** — the changed-files panel and the file tree share
+  one `git rev-parse`/`git status --untracked-files=all` per repo (cached a
+  few seconds), instead of each running its own.
+- **Usage estimate cache** — `board-usage` keeps per-session-file aggregates
+  (cost, skill names, used-or-not flags; file names and folders only as
+  hashes) in `~/.cache/herdr-agent-board/usage-v1.json` (or
+  `$XDG_CACHE_HOME/herdr-agent-board/`, or `$HERDR_AGENT_BOARD_CACHE`).
+  Unchanged files (same mtime and size) aren't re-read; the cache resets
+  each month. Delete the file any time; it's rebuilt on the next refresh.
+- **Polling stops when hidden** — the changed-files, recent-commits, todo
+  and usage panels stop polling while collapsed, and the file panels while
+  the Files sidebar is hidden; they refresh right away when reopened.
+- **Session picker** lists the 200 most recent Codex/Claude sessions, with
+  `세션 더 보기` to load more.
+- Tests use only the standard library and Node built-ins:
+  `node --test tests/*.test.mjs` and `python3 -m unittest discover -s tests`.
