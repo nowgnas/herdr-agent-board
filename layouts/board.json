@@ -240,16 +240,47 @@
           }
         },
         {
-          "id": "board-timeline",
-          "type": "block",
+          "id": "board-bottom-panels",
+          "type": "column",
           "size": {
-            "px": 170
+            "px": 340
           },
-          "min": 26,
-          "max": 400,
-          "content": {
-            "mod": "board-timeline"
-          }
+          "min": 70,
+          "max": 760,
+          "resizable": true,
+          "divider": {
+            "width": 1,
+            "color": "border"
+          },
+          "children": [
+            {
+              "id": "board-timeline",
+              "type": "block",
+              "size": {
+                "weight": 170
+              },
+              "min": 26,
+              "max": 400,
+              "content": {
+                "mod": "board-timeline"
+              }
+            },
+            {
+              "id": "board-todo",
+              "type": "block",
+              "size": {
+                "weight": 170
+              },
+              "min": 26,
+              "max": 400,
+              "content": {
+                "mod": "board-todo",
+                "props": {
+                  "folder": "~/ebay-obsidian/Todo"
+                }
+              }
+            }
+          ]
         }
       ]
     }

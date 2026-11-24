@@ -99,7 +99,7 @@ export default class Timeline extends View {
     return v_flex().size_full().min_h(0).bg(t.canvas).border_t(1).border_color(t.border).text_color(t.foreground)
       .child(h_flex().id("timeline-toggle").h(26).flex_none().px(10).gap(6).items_center().cursor_pointer().hover(s => s.bg(t.hover))
         .tooltip(collapsed ? "최근 커밋 펼치기" : "최근 커밋 접기")
-        .on_click(() => run("layout.resize", collapsed ? { id: "board-timeline", px: 170 } : { id: "board-timeline", px: 26 }))
+        .on_click(() => run("layout.resize", collapsed ? { id: "board-timeline", weight: 170 } : { id: "board-timeline", px: 26 }))
         .child(div().flex_1().text_size(10).font_semibold().child("최근 커밋"))
         .child(div().text_color(t.muted).child(collapsed ? "▸" : "▾")))
       .when(!collapsed, el => el.child(v_flex().flex_1().min_h(0).px(8).pb(6).gap(4).overflow_y_scrollbar().text_size(10)

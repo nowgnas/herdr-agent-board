@@ -33,6 +33,8 @@
 !mods/board-usage/**
 !mods/board-worktree/
 !mods/board-worktree/**
+!mods/board-todo/
+!mods/board-todo/**
 
 # Written by Herdr into each mod folder for editor tooling; not hand-authored.
 mods/board*/jsconfig.json
