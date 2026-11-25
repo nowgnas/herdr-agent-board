@@ -133,6 +133,12 @@ export default class Todo extends View {
         }
         const petPath = `${folder}/.pet.json`;
         let petText = await readTextFile(petPath);
+        // A toggle/grow may have queued a write while these reads were in
+        // flight (pendingWrites was 0 when refresh() started but isn't
+        // anymore) — applying this now-stale read would revert the optimistic
+        // UI state right back. Bail and let the next refresh (after the
+        // queued write lands) pick up the real content.
+        if (this.pendingWrites > 0) { unchanged = true; return; }
         // 파일 텍스트와 pet이 그대로면 다시 파싱하거나 다시 그리지 않습니다.
         if (`${this.folder}|${this.today}` === key && this.list?.text === text && this.petRaw !== null && this.petRaw === petText && !this.error) {
           unchanged = true;

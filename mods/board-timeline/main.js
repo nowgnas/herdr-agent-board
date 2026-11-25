@@ -28,7 +28,7 @@ export default class Timeline extends View {
   refresh(cx) {
     const loc = location(), key = JSON.stringify(loc);
     if (key !== this.key) {
-      this.key = key; this.root = null; this.commits = null; this.error = null;
+      this.key = key; this.root = null; this.commits = null; this.error = null; this.me = null;
       this.expanded = new Set(); this.filesByHash = new Map();
     }
     if (!loc.cwd || loc.machine || this.loading || checking()) return;
@@ -38,14 +38,17 @@ export default class Timeline extends View {
         const top = await exec("git", ["rev-parse", "--show-toplevel"], { cwd: loc.cwd });
         if (top.code !== 0) throw new Error(tr("git 저장소가 아닙니다", "Not a git repository"));
         const root = top.stdout.trim();
-        const log = await exec("git", ["log", `-n${LIMIT}`, "--format=%h\x1f%an\x1f%ar\x1f%s"], { cwd: root });
+        const log = await exec("git", ["log", `-n${LIMIT}`, "--format=%h\x1f%ae\x1f%an\x1f%ar\x1f%s"], { cwd: root });
         if (log.code !== 0) throw new Error(tr("git log 실패", "git log failed"));
         const commits = log.stdout.split("\n").filter(Boolean).map(line => {
-          const [hash, author, when, subject] = line.split("\x1f");
-          return { hash, author, when, subject };
+          const [hash, email, author, when, subject] = line.split("\x1f");
+          return { hash, email, author, when, subject };
         });
+        // 내 커밋 강조용: 이 저장소에 설정된 작성자 이메일(없으면 강조 없음).
+        const who = await exec("git", ["config", "user.email"], { cwd: root }).catch(() => null);
         if (this.key === key) {
           this.root = root; this.commits = commits; this.error = null;
+          this.me = who?.code === 0 ? who.stdout.trim() || null : null;
           // 최근 LIMIT개 커밋에 없는 파일 목록·펼침 상태는 버립니다.
           const live = new Set(commits.map(c => c.hash));
           for (const hash of [...this.filesByHash.keys()]) if (!live.has(hash)) this.filesByHash.delete(hash);
@@ -70,8 +73,11 @@ export default class Timeline extends View {
       if (this.key !== key) return;
       const files = result && result.code === 0
         ? result.stdout.split("\n").filter(Boolean).map(line => {
+          // A rename/copy line is "R100<TAB>old<TAB>new" (git may report a
+          // similarity score and more than one old path for C): the current
+          // path to preview is always the last field, not every field joined.
           const [status, ...rest] = line.split("\t");
-          return { status: status[0], path: rest.join("\t") };
+          return { status: status[0], path: rest.at(-1) };
         })
         : [];
       this.filesByHash.set(hash, files);
@@ -85,9 +91,10 @@ export default class Timeline extends View {
   row(c, t) {
     const open = this.expanded.has(c.hash);
     const files = this.filesByHash.get(c.hash);
-    return v_flex().flex_none()
+    const mine = Boolean(this.me) && c.email === this.me;
+    return v_flex().flex_none().rounded(5).py(1).when(mine, el => el.bg(`${t.working}1f`))
       .child(h_flex().id(`commit-${c.hash}`).gap(6).items_center().py(2).px(2).rounded(4).cursor_pointer().hover(s => s.bg(t.hover))
-        .tooltip(`${c.subject}\n${c.author} · ${c.when}`)
+        .tooltip(`${c.subject}\n${c.author} · ${c.when}${mine ? tr(" · 내 커밋", " · your commit") : ""}`)
         .on_click((_e, cx) => this.toggle(c.hash, cx))
         .child(svg(`mods/board-files/chevron-${open ? "down" : "right"}.svg`).size(10).flex_none().text_color(t.dim))
         .child(div().flex_none().font_semibold().text_color(t.accent).child(c.hash))

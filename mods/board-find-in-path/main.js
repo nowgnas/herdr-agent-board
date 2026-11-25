@@ -105,8 +105,15 @@ export default class FindInPath extends View {
           // on those instead of just skipping them.
           const ls = await exec("git", ["ls-files", "--cached", "--others", "--exclude-standard", "-z"], { cwd: this.root });
           if (ls.code !== 0) throw new Error(tr("파일 목록을 가져올 수 없습니다", "Could not get file list"));
-          const files = ls.stdout.split("\0").filter(Boolean).slice(0, 5000);
-          result = files.length ? await exec("grep", ["-nF", "--", query, ...files], { cwd: this.root }) : { code: 1, stdout: "", stderr: "" };
+          // --cached also lists files removed from the working tree but not
+          // yet staged as deleted — grep would exit 2 on those (treated below
+          // as a hard failure) instead of just skipping them.
+          const del = await exec("git", ["ls-files", "--deleted", "-z"], { cwd: this.root }).catch(() => null);
+          const deleted = new Set((del?.stdout ?? "").split("\0").filter(Boolean));
+          const files = ls.stdout.split("\0").filter(Boolean).filter(f => !deleted.has(f)).slice(0, 5000);
+          // -H: always prefix the filename, even with a single file (grep
+          // otherwise omits it, and parseLine then has no path to read).
+          result = files.length ? await exec("grep", ["-nHF", "--", query, ...files], { cwd: this.root }) : { code: 1, stdout: "", stderr: "" };
         }
         if (gen !== this.gen) return;
         if (result.code !== 0 && result.code !== 1) throw new Error(result.stderr || tr("검색 실패", "Search failed"));
