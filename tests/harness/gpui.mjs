@@ -1,8 +1,8 @@
 // gpui-kit/gpui-base 스텁: 모든 메서드가 자신을 돌려주는 요소. 만든 요소 수와 핸들러를 기록합니다.
 export const stats = { created: 0 };
-function element(kind) {
+function element(kind, init) {
   stats.created++;
-  const node = { kind, kids: [], props: {}, handlers: {} };
+  const node = { kind, kids: init?.kids ? [...init.kids] : [], props: init?.props ? { ...init.props } : {}, handlers: {} };
   const proxy = new Proxy(node, {
     get(target, prop) {
       if (prop in target) return target[prop];
@@ -27,6 +27,10 @@ export const EditorState = { new: opts => ({ opts, release() {} }) };
 export const Input = { new: () => element("input") };
 export const InputState = { new: () => ({ on() {}, focus() {}, value: () => "", set_value() {} }) };
 export const Scrollbar = { vertical: () => element("scrollbar") };
+export const TextView = {
+  html: (id, html) => element("text-view", { props: { id, format: "html" }, kids: [html] }),
+  markdown: (id, markdown) => element("text-view", { props: { id, format: "markdown" }, kids: [markdown] }),
+};
 
 // 트리 탐색 도우미
 export function walk(node, fn) {

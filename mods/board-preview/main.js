@@ -1,5 +1,5 @@
 import { View, div } from "gpui-kit";
-import { v_flex, h_flex, Editor, EditorState } from "gpui-base";
+import { v_flex, h_flex, Editor, EditorState, TextView } from "gpui-base";
 import { shared, setShared, readTextFile, exec, run, theme, settings, checking, window } from "herdr";
 import { parseDiffLines, segmentsOf, highlightRange, truncateText, utf8Length, diffView, longestLine, maxScrollX } from "./diff.js";
 import { DIFF_MAX_CHARS, DIFF_MAX_LINES, VIRTUAL_MIN_ROWS } from "./_common/limits.js";
@@ -7,6 +7,9 @@ import { wheelScroll, scrollThumb } from "./_common/virtual.js";
 import { tr } from "./_common/i18n.js";
 
 const LANG = { ts: "js", tsx: "js", mts: "js", cts: "js", jsx: "js", mjs: "js", toml: "yaml", jsonc: "json", svelte: "html", vue: "html" };
+// Full-file (non-diff) view of these extensions renders as formatted
+// Markdown (tables, headings, ...) instead of raw source.
+const MARKDOWN_EXT = new Set(["md", "markdown"]);
 // 가상 스크롤 diff의 고정 행 높이와 12px 고정폭 글꼴의 대략적인 글자 폭(가로 스크롤 범위 추정)
 // FONT_SIZE: diff 행 글자 크기(가로 스크롤 폭 계산에도 같은 값을 씁니다)
 const ROW_H = 17, FONT_SIZE = 12, GUTTER_W = 100;
@@ -57,6 +60,7 @@ export default class Preview extends View {
     this.key = key;
     this.code?.release();
     this.code = null;
+    this.markdown = null;
     this.diffLines = null;
     this.diffExt = null;
     this.diffTruncated = false;
@@ -88,6 +92,8 @@ export default class Preview extends View {
           // 하이라이트는 여기서 한 번만(행 상한까지). 그 뒤 줄은 처음 보일 때 한 번 계산해 캐시.
           highlightRange(this.diffLines, ext, 0, this.lineLimit);
           this.maxCells = longestLine(this.diffLines, this.lineLimit);
+        } else if (MARKDOWN_EXT.has(ext)) {
+          this.markdown = truncated ? text + "\n\n… (file truncated)" : text;
         } else {
           const t = theme();
           this.code = EditorState.new({ language: LANG[ext] ?? ext, readonly: true,
@@ -189,6 +195,8 @@ export default class Preview extends View {
         .child(div().id("board-preview-close").px(8).py(4).rounded(4).cursor_pointer().hover(s => s.bg(t.hover))
           .tooltip(tr("파일 미리보기 닫기", "Close file preview")).on_click(() => { setShared("board.preview", null); run("layout.hide", { id: "board-preview" }); }).child("×")))
       .child(this.isDiff && this.diffLines ? this.renderDiff(t)
+        : this.markdown != null ? v_flex().id("board-preview-markdown").flex_1().min_h(0).p(12).overflow_y_scrollbar()
+            .child(TextView.markdown("board-preview-md", this.markdown).selectable(true))
         : this.code ? Editor.new(this.code).flex_1().min_h(0)
         : div().p(12).text_size(12).text_color(t.dim).child(this.error || (selection ? "Loading file…" : "Select a file")));
   }
