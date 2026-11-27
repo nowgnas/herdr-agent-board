@@ -297,7 +297,7 @@ export default class Todo extends View {
           .child("📁"))
         .child(div().text_color(t.muted).child(collapsed ? "▸" : "▾")))
       .when(!collapsed, el => el.child(v_flex().flex_1().min_h(0).p(8).gap(4).overflow_y_scrollbar()
-        .when(!folder, e => e.child(div().p(8).text_size(11).text_color(t.dim).child(tr("props.folder가 설정되지 않았습니다", "props.folder is not set"))))
+        .when(!folder, e => e.child(div().p(8).text_size(11).text_color(t.dim).child(tr("저장 폴더가 아직 없습니다 — 위 📁를 눌러 골라주세요", "No save folder yet — click 📁 above to choose one"))))
         .when(Boolean(folder) && Boolean(this.error), e => e.child(div().p(8).text_size(11).text_color(t.dim).child(this.error)))
         .when(Boolean(folder) && !this.error && this.list === null, e => e.child(div().p(8).text_size(11).text_color(t.dim).child(tr("불러오는 중…", "Loading…"))))
         .when(Boolean(folder) && !this.error && Boolean(this.list), e => e

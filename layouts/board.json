@@ -274,10 +274,7 @@
               "min": 26,
               "max": 400,
               "content": {
-                "mod": "board-todo",
-                "props": {
-                  "folder": "~/ebay-obsidian/Todo"
-                }
+                "mod": "board-todo"
               }
             }
           ]
